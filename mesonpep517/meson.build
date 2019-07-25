@@ -1,1 +1,1 @@
-python.install_sources('buildapi.py', pure: true)
+python.install_sources('buildapi.py', '__init__.py', pure: true, subdir: 'mesonpep517')

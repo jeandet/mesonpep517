@@ -65,7 +65,7 @@ def prepare_metadata_for_build_wheel(metadata_directory,
 
     dist_info = Path(metadata_directory, '{}-{}.dist-info'.format(
         project['descriptive_name'], project['version']))
-    dist_info.mkdir()
+    dist_info.mkdir(exist_ok=True)
 
     with (dist_info / 'WHEEL').open('w') as f:
         _write_wheel_file(f, supports_py2=False)
