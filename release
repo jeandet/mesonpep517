@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/sh -e
 
-python -m pep517.build .
+rm -R dist/*
+python3 -m pep517.build .
 twine upload dist/*

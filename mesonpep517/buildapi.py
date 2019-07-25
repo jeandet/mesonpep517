@@ -5,6 +5,7 @@ import tarfile
 import os
 import json
 import subprocess
+import pytoml
 
 from gzip import GzipFile
 from pathlib import Path
@@ -52,6 +53,66 @@ def _write_wheel_file(f, *, supports_py2=False):
         f.write("Tag: py2-none-any\n")
     f.write("Tag: py3-none-any\n")
 
+PKG_INFO = """\
+Metadata-Version: 2.1
+Name: {name}
+Version: {version}
+Summary: {summary}
+Home-page: {home_page}
+Author: {author}
+Author-email: {author_email}
+Description: {description}
+Description-Content-Type: text/markdown
+"""
+
+def get_metadata(project):
+    meta = {
+        'name': project['descriptive_name'],
+        'version': project['version'],
+    }
+
+    toml = pytoml.load(open('pyproject.toml'))
+    try:
+        pytomlmeta = toml['tool']['mesonpep517']['metadata']
+    except KeyError:
+        pytomlmeta = {}
+
+    try:
+        mesonmeta = project['metadata']['python']
+    except KeyError:
+        mesonmeta = {}
+
+    for key in ['summary', 'home_page', 'author', 'author_email']:
+        val = mesonmeta.get(key)
+        if not val:
+            val = pytomlmeta[key.replace('_', '-')]
+        meta[key] = val
+
+    description = ''
+    if 'description' in pytomlmeta:
+        description = pytomlmeta['description']
+    elif 'description-file' in pytomlmeta:
+        with open(pytomlmeta['description-file'], 'r') as f:
+            description = '\n'
+            for line in f.readlines():
+                description += '    ' + line
+    meta['description'] = description
+    res = PKG_INFO.format(**meta)
+
+    for key, mdata_key in [
+            ('requires_dist', 'Requires-Dist'),
+            ('classifiers', 'Classifier'),
+            ('projects_urls', 'Project-URL')]:
+
+        vals = mesonmeta.get(key)
+        if not vals:
+            vals = pytomlmeta.get(key, [])
+
+        for val in vals:
+            res += '{}: {}\n'.format(mdata_key, val)
+
+    return res
+
 
 def prepare_metadata_for_build_wheel(metadata_directory,
                                      config_settings=None,
@@ -71,21 +132,7 @@ def prepare_metadata_for_build_wheel(metadata_directory,
         _write_wheel_file(f, supports_py2=False)
 
     with (dist_info / 'METADATA').open('w') as f:
-        fields = {
-            'Metadata-Version': '2.1',
-            'Name': project['descriptive_name'],
-            'Version': project['version'],
-            'Summary': None,
-            'Home-page': None,
-            'License': None,
-        }
-
-        for field, value in fields.items():
-            if value is None:
-                value = project.get(field.lower(), None)
-
-            if value is not None:
-                f.write("{}: {}\n".format(field, value))
+        f.write(get_metadata(project))
 
     return dist_info.name
 
@@ -134,17 +181,6 @@ def build_wheel(wheel_directory,
         wheel_directory), config_settings, metadata_directory)
 
 
-PKG_INFO = """\
-Metadata-Version: 1.1
-Name: {name}
-Version: {version}
-Summary: {summary}
-Home-page: {home_page}
-Author: {author}
-Author-email: {author_email}
-"""
-
-
 def build_sdist(sdist_directory, config_settings=None):
     """Builds an sdist, places it in sdist_directory"""
     distdir = Path(sdist_directory)
@@ -158,20 +194,13 @@ def build_sdist(sdist_directory, config_settings=None):
 
             tf_dir = '{}-{}'.format(project['descriptive_name'],
                                     project['version'])
-            distfilename = '%s.tar.xz' % tf_dir
+            mesondistfilename = '%s.tar.xz' % tf_dir
             mesondisttar = tarfile.open(
-                Path(builddir) / 'meson-dist' / distfilename)
+                Path(builddir) / 'meson-dist' / mesondistfilename)
             mesondisttar.extractall(installdir)
 
-            pkg_info = PKG_INFO.format(
-                name=project['descriptive_name'],
-                version=project['version'],
-                summary="Unknown",
-                home_page="Unknown",
-                author="Unknown",
-                author_email="Unknown",
-            )
-
+            pkg_info = get_metadata(project)
+            distfilename = '%s.tar.gz' % tf_dir
             target = distdir / distfilename
             source_date_epoch = os.environ.get('SOURCE_DATE_EPOCH', '')
             mtime = int(source_date_epoch) if source_date_epoch else None
