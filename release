@@ -1,5 +1,5 @@
 #!/bin/sh -e
 
-rm -R dist/*
+rm -Rf dist/*
 python3 -m pep517.build .
 twine upload dist/*
