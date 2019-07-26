@@ -1,6 +1,6 @@
 project(
     'mesonpep517',
-    version : '0.1.5',
+    version : '0.1.96',
     license: 'LGPL2+',
     metadata: {'python-metadata': {
             'summary': 'Create pep517 compliant builds from the meson build system',
@@ -18,7 +18,16 @@ project(
                 'Programming Language :: Python :: 3',
                 'Topic :: Software Development :: Libraries :: Python Modules',
             ],
-            'requires_dist ':  ['wheel', 'meson', 'pytoml',]
+            'requires_dist ':  ['wheel', 'meson', 'pytoml',],
+            'entry_points': {
+                'console_scripts': [
+                    'otioview = opentimelineview.console:main',
+                    'otiocat = opentimelineio.console.otiocat:main',
+                    'otioconvert = opentimelineio.console.otioconvert:main',
+                    'otiostat = opentimelineio.console.otiostat:main',
+                    'otioautogen_serialized_schema_docs = opentimelineio.console.autogen_serialized_datamodel:main',
+                ]
+            }
         }
     },
 )

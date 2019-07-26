@@ -1,12 +1,16 @@
 """PEP-517 compliant buildsystem API"""
 import contextlib
+import sysconfig
 import tempfile
 import tarfile
 import os
+import sys
 import json
 import subprocess
 import pytoml
+import platform
 
+from distutils import util
 from gzip import GzipFile
 from pathlib import Path
 from wheel.wheelfile import WheelFile
@@ -43,12 +47,12 @@ get_requires_for_build_sdist = get_requires_for_build_wheel
 wheel_file_template = """\
 Wheel-Version: 1.0
 Generator: mesonpep517
-Root-Is-Purelib: true
+Root-Is-Purelib: {}
 """
 
 
-def _write_wheel_file(f, *, supports_py2=False):
-    f.write(wheel_file_template)
+def _write_wheel_file(f, supports_py2, is_pure):
+    f.write(wheel_file_template.format(str(is_pure).lower()))
     if supports_py2:
         f.write("Tag: py2-none-any\n")
     f.write("Tag: py3-none-any\n")
@@ -133,6 +137,50 @@ def get_entry_points(project):
 
     return res
 
+def get_python_install(installed):
+    variables = sysconfig.get_config_vars()
+    suffix = variables.get('EXT_SUFFIX') or variables.get('SO') or variables.get('.so')
+    # msys2's python3 has "-cpython-36m.dll", we have to be clever
+    split = suffix.rsplit('.', 1)
+    suffix = split.pop(-1)
+
+    pyvers = set()
+    abi = 'none'
+    is_pure = True
+    for installpath in installed.values():
+        if "site-packages" in installpath:
+            dirname = os.path.dirname(installpath)
+            while os.path.basename(dirname) != "site-packages":
+                dirname = os.path.dirname(dirname)
+
+            parent_dir = os.path.basename(os.path.dirname(dirname))
+            if installpath.split('.')[-1] == suffix:
+                is_pure = False
+                filename = os.path.basename(installpath)
+                fname_split = filename.split('.')[1].split('-')
+                if fname_split[0] == 'cpython':
+                    if abi == 'none':
+                        abi = 'cp' + fname_split[1]
+                    pyvers.add('cp' + fname_split[1][:-1])
+                elif parent_dir == 'python2.7':
+                    pyvers.add('cp27')
+                    abi = 'cp27m'
+                else:
+                    raise RuntimeError('Python installation %s not handled' % parent_dir)
+            else:
+                if parent_dir.startswith('python'):
+                    version = parent_dir[len("python"):]
+                    if version[0].isdigit():
+                        pyver = 'py' + version[0]
+                        pyvers.add(pyver)
+
+    if not is_pure:
+        pyvers = [ver for ver in pyvers if 'cp' in ver]
+
+    if not pyvers:
+        pyvers = ['any']
+
+    return is_pure, '.'.join(pyvers), abi
 
 def prepare_metadata_for_build_wheel(metadata_directory,
                                      config_settings=None,
@@ -148,8 +196,9 @@ def prepare_metadata_for_build_wheel(metadata_directory,
         project['descriptive_name'], project['version']))
     dist_info.mkdir(exist_ok=True)
 
+    is_pure, _, _ = get_python_install(meson_introspect(builddir, 'installed'))
     with (dist_info / 'WHEEL').open('w') as f:
-        _write_wheel_file(f, supports_py2=False)
+        _write_wheel_file(f, False, is_pure)
 
     with (dist_info / 'METADATA').open('w') as f:
         f.write(get_metadata(project))
@@ -169,15 +218,24 @@ class WheelBuilder:
         self.installdir = tempfile.TemporaryDirectory()
 
     def build(self, wheel_directory, config_settings, metadata_dir):
-        meson(self.builddir.name, '--prefix', self.installdir.name,
-              config_settings=config_settings)
+        args = [self.builddir.name, '--prefix', self.installdir.name]
+        if 'MESON_ARGS' in os.environ:
+            args += os.environ.get('MESON_ARGS').split(' ')
+        meson(*args, config_settings=config_settings)
 
         metadata_dir = prepare_metadata_for_build_wheel(
             wheel_directory, builddir=self.builddir.name)
         project = meson_introspect(self.builddir.name, 'projectinfo')
-        target_fp = wheel_directory / '{}-{}-py3-none-any.whl'.format(
+        installed_files = meson_introspect(self.builddir.name, 'installed')
+
+        is_pure, pyver, abi = get_python_install(installed_files)
+        platform_tag = 'any' if is_pure else util.get_platform().replace('-', '_')
+        target_fp = wheel_directory / '{}-{}-{}-{}-{}.whl'.format(
             project['descriptive_name'],
             project['version'],
+            pyver,
+            abi,
+            platform_tag,
         )
         self.wheel_zip = WheelFile(target_fp, 'w')
         for f in os.listdir(os.path.join(wheel_directory, metadata_dir)):
@@ -187,7 +245,6 @@ class WheelBuilder:
 
         # Make sure everything is built
         subprocess.check_call(['ninja', '-C', self.builddir.name, 'install'])
-        installed_files = meson_introspect(self.builddir.name, 'installed')
         for sfile, installpath in installed_files.items():
             if "site-packages" in installpath:
                 while os.path.basename(installpath) != 'site-packages':
