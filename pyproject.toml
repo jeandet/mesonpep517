@@ -24,3 +24,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires_dist = ["wheel", "meson", "pytoml",]
+
+[tool.mesonpep517.entry-points]
+console_scripts = [
+    'buildapi = mesonpep517.buildapi'
+]

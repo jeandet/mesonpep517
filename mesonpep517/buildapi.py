@@ -113,6 +113,26 @@ def get_metadata(project):
 
     return res
 
+def get_entry_points(project):
+    try:
+        entrypoints = project['metadata']['python']['entry-points']
+    except KeyError:
+        toml = pytoml.load(open('pyproject.toml'))
+        try:
+            entrypoints = toml['tool']['mesonpep517']['entry-points']
+        except KeyError:
+            return None
+
+    res = ''
+    for group_name in sorted(entrypoints):
+        res += '[{}]\n'.format(group_name)
+        group = entrypoints[group_name]
+        for entrypoint in sorted(group):
+            res += '{}\n'.format(entrypoint)
+        res += '\n'
+
+    return res
+
 
 def prepare_metadata_for_build_wheel(metadata_directory,
                                      config_settings=None,
@@ -133,6 +153,11 @@ def prepare_metadata_for_build_wheel(metadata_directory,
 
     with (dist_info / 'METADATA').open('w') as f:
         f.write(get_metadata(project))
+
+    entrypoints = get_entry_points(project)
+    if entrypoints:
+        with (dist_info / 'entry_points.txt').open('w') as f:
+            f.write(entrypoints)
 
     return dist_info.name
 
