@@ -69,8 +69,6 @@ Summary: {summary}
 Home-page: {home_page}
 Author: {author}
 Author-email: {author_email}
-Description: {description}
-Description-Content-Type: {description_content_type}
 """
 
 
@@ -95,12 +93,12 @@ def get_metadata(project, config):
     if 'description-file' in configmeta:
         description_file = Path(configmeta['description-file'])
         with open(description_file, 'r') as f:
-            description = '\n'
-            for line in f.readlines():
-                description += '    ' + line
+            description = f.read()
+
         description_content_type = readme_ext_to_content_type.get(
             description_file.suffix, description_content_type)
-    meta['description'] = description
+    elif 'description' in configmeta:
+        description = configmeta['description']
     meta['description_content_type'] = description_content_type
     res = PKG_INFO.format(**meta)
 
@@ -112,6 +110,11 @@ def get_metadata(project, config):
         vals = configmeta.get(key, [])
         for val in vals:
             res += '{}: {}\n'.format(mdata_key, val)
+
+    if description:
+        res += 'Description-Content-Type: {description_content_type}\n'.format(
+            **meta)
+        res += 'Description:\n\n' + description
 
     return res
 
