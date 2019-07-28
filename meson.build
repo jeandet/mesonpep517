@@ -1,6 +1,6 @@
 project(
     'mesonpep517',
-    version : '0.1.991',
+    version : '0.1.994',
     license: 'LGPL2+',
 )
 

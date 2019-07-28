@@ -15,8 +15,9 @@ requires=[
     "wheel",
     "meson",
 ]
-requires-python="3"
+requires-python="py3"
 description-file="README.md"
+platforms="any"
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
