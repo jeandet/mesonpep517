@@ -70,9 +70,15 @@ Home-page: {home_page}
 Author: {author}
 Author-email: {author_email}
 Description: {description}
-Description-Content-Type: text/markdown
+Description-Content-Type: {description_content_type}
 """
 
+
+readme_ext_to_content_type = {
+    '.rst': 'text/x-rst',
+    '.md': 'text/markdown',
+    '.txt': 'text/plain',
+}
 
 def get_metadata(project, config):
     meta = {
@@ -85,20 +91,23 @@ def get_metadata(project, config):
         meta[key] = configmeta[key.replace('_', '-')]
 
     description = ''
-    if 'description' in configmeta:
-        description = configmeta['description']
-    elif 'description-file' in configmeta:
-        with open(configmeta['description-file'], 'r') as f:
+    description_content_type = 'text/plain'
+    if 'description-file' in configmeta:
+        description_file = Path(configmeta['description-file'])
+        with open(description_file, 'r') as f:
             description = '\n'
             for line in f.readlines():
                 description += '    ' + line
+        description_content_type = readme_ext_to_content_type.get(
+            description_file.suffix, description_content_type)
     meta['description'] = description
+    meta['description_content_type'] = description_content_type
     res = PKG_INFO.format(**meta)
 
     for key, mdata_key in [
             ('requires_dist', 'Requires-Dist'),
             ('classifiers', 'Classifier'),
-            ('projects_urls', 'Project-URL')]:
+            ('project_urls', 'Project-URL')]:
 
         vals = configmeta.get(key, [])
         for val in vals:
@@ -229,7 +238,7 @@ class WheelBuilder:
 
         if not is_pure:
             python = 'python3'
-            option_build = config['tool']['mesonpep517']['metadata'].get('meson_python_option_name')
+            option_build = config['tool']['mesonpep517']['metadata'].get('meson-python-option-name')
             if not option_build:
                 python = 'python3'
             else:

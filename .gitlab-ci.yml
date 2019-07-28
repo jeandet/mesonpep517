@@ -1,0 +1,15 @@
+stages:
+  - deploy
+
+pages:
+  stage: 'deploy'
+  image: python:3.7-stretch
+  script:
+    - apt-get update && apt-get install python3-dev libxml2-dev libxslt1-dev cmake libyaml-dev libclang-dev llvm-dev libglib2.0-dev libjson-glib-dev flex ninja-build  -y
+    - pip3 install . hotdoc
+    - meson build/ && ninja -C build doc/mesonpep517-doc
+    - mv build/doc/mesonpep517-doc/html public
+  artifacts:
+    paths:
+    - public
+

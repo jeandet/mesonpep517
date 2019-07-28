@@ -6,15 +6,10 @@ build-backend = "intreehooks:loader"
 build-backend = "mesonpep517.buildapi"
 
 [tool.mesonpep517.metadata]
-module="mesonpep517"
-summary="Create pep517 compliant builds from the meson build system"
 author="Thibault Saunier"
 author-email="tsaunier@gnome.org"
+summary="Create pep517 compliant packages from the meson build system"
 home-page="https://gitlab.com/thiblahute/mesonpep517"
-requires=[
-    "wheel",
-    "meson",
-]
 requires-python="py3"
 description-file="README.md"
 platforms="any"
@@ -25,3 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires_dist = ["wheel", "meson", "pytoml",]
+project_urls= [
+    "Source, https://gitlab.com/thiblahute/mesonpep517",
+    "Documentation, https://thiblahute.gitlab.io/mesonpep517/",
+]
