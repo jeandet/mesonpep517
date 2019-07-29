@@ -244,9 +244,9 @@ class WheelBuilder:
             option_build = config['tool']['mesonpep517']['metadata'].get('meson-python-option-name')
             if not option_build:
                 python = 'python3'
-            else:
-                log.warning("meson_python_option not specified in the " +
+                log.warning("meson-python-option-name not specified in the " +
                     "[tool.mesonpep517.metadata] section, assuming `python3`")
+            else:
                 for opt in self.introspect('buildoptions'):
                     if opt['name'] == 'python_version':
                         python = opt['value']
@@ -261,7 +261,7 @@ class WheelBuilder:
             abi,
             platform_tag,
         )
-        self.wheel_zip = WheelFile(target_fp, 'w')
+        self.wheel_zip = WheelFile(target_fp.name, 'w')
         for f in os.listdir(os.path.join(wheel_directory, metadata_dir)):
             self.wheel_zip.write(os.path.join(
                 wheel_directory, metadata_dir, f),
