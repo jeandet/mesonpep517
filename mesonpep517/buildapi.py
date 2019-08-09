@@ -27,6 +27,24 @@ def meson_introspect(_dir, introspect_type):
         return json.load(f)
 
 
+def meson_configure(*args, config_settings=None):
+    if 'MESON_ARGS' in os.environ:
+       args = os.environ.get('MESON_ARGS').split(' ') + list(args)
+
+    meson(*args, config_settings=config_settings)
+
+def get_config():
+    with open('pyproject.toml') as f:
+        config = pytoml.load(f)
+        try:
+            configmeta = config['tool']['mesonpep517']['metadata']
+        except KeyError:
+            raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
+                "for the meson backend")
+
+        return config
+
+
 @contextlib.contextmanager
 def cd(path):
     CWD = os.getcwd()
@@ -40,7 +58,7 @@ def cd(path):
 
 def get_requires_for_build_wheel(config_settings=None):
     """Returns a list of requirements for building, as strings"""
-    return ['setuptools']
+    return get_config().get('requires_dist', [])
 
 
 # For now, we require all dependencies to build either a wheel or an sdist.
@@ -85,6 +103,18 @@ def get_metadata(project, config):
     }
 
     configmeta = config['tool']['mesonpep517']['metadata']
+    if 'pkg-info-file' in configmeta:
+        res = '\n'.join(PKG_INFO.split('\n')[:3]).format(**meta) + '\n'
+        with open(configmeta['pkg-info-file'], 'r') as f:
+            orig_lines = f.readlines()
+            for l in orig_lines:
+                if l.startswith('Metadata-Version:') or \
+                        l.startswith('Version:'):
+                    continue
+                res += l
+
+        return  res
+
     for key in ['summary', 'home_page', 'author', 'author_email']:
         meta[key] = configmeta[key.replace('_', '-')]
 
@@ -155,19 +185,6 @@ def check_is_pure(installed):
     return True
 
 
-def get_config():
-    with open('pyproject.toml') as f:
-        config = pytoml.load(f)
-        try:
-            configmeta = config['tool']['mesonpep517']['metadata']
-        except KeyError:
-            raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
-                "for the meson backend")
-
-        
-        return config
-
-
 def prepare_metadata_for_build_wheel(metadata_directory,
                                      config_settings=None,
                                      builddir=None,
@@ -175,7 +192,7 @@ def prepare_metadata_for_build_wheel(metadata_directory,
     """Creates {metadata_directory}/foo-1.2.dist-info"""
     if not builddir:
         builddir = tempfile.TemporaryDirectory().name
-        meson(builddir, config_settings=config_settings)
+        meson_configure(builddir, config_settings=config_settings)
     if not config:
         config = get_config()
 
@@ -222,9 +239,7 @@ class WheelBuilder:
 
     def build(self, wheel_directory, config_settings, metadata_dir):
         args = [self.builddir.name, '--prefix', self.installdir.name]
-        if 'MESON_ARGS' in os.environ:
-            args += os.environ.get('MESON_ARGS').split(' ')
-        meson(*args, config_settings=config_settings)
+        meson_configure(*args, config_settings=config_settings)
 
         config = get_config()
         metadata_dir = prepare_metadata_for_build_wheel(
@@ -261,11 +276,10 @@ class WheelBuilder:
             abi,
             platform_tag,
         )
-        self.wheel_zip = WheelFile(target_fp.name, 'w')
-        for f in os.listdir(os.path.join(wheel_directory, metadata_dir)):
-            self.wheel_zip.write(os.path.join(
-                wheel_directory, metadata_dir, f),
-                arcname=os.path.join(metadata_dir, f))
+        self.wheel_zip = WheelFile(str(target_fp), 'w')
+        for f in os.listdir(str(wheel_directory / metadata_dir)):
+            self.wheel_zip.write(str(wheel_directory / metadata_dir / f),
+                arcname=str(Path(metadata_dir) / f))
 
         # Make sure everything is built
         subprocess.check_call(['ninja', '-C', self.builddir.name, 'install'])

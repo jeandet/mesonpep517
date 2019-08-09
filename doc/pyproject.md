@@ -21,6 +21,13 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
+### `pkg-info-file`
+
+Pass a PKG-INFO file direcly usable.
+
+> ! NOTE: All other keys will be ignored if you pass an already prepared `PKG-INFO`
+> file
+
 ### `author`
 
 Your name
