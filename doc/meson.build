@@ -3,6 +3,11 @@ if run_command(python, '-c', 'import hotdoc').returncode() != 0
     subdir_done()
 endif
 
+if not find_program('hotdoc', required: false).found()
+    message('Not building documentation')
+    subdir_done()
+endif
+
 hotdoc = import('hotdoc')
 libs_doc = [hotdoc.generate_doc('mesonpep517',
     project_version: meson.project_version(),
