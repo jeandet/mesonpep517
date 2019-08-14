@@ -2,6 +2,7 @@
 import contextlib
 import sysconfig
 import logging
+import sys
 import tempfile
 import tarfile
 import os
@@ -18,8 +19,25 @@ from wheel.wheelfile import WheelFile
 log = logging.getLogger(__name__)
 
 
-def meson(*args, config_settings=None):
-    return subprocess.check_output(['meson'] + list(args))
+def meson(*args, config_settings=None, builddir=''):
+    try:
+        return subprocess.check_output(['meson'] + list(args))
+    except subprocess.CalledProcessError as e:
+        stdout = ''
+        stderr = ''
+        if e.stdout:
+            stdout = e.stdout.decode()
+        if e.stderr:
+            stderr = e.stderr.decode()
+        print("Could not run meson: %s\n%s" % (stdout, stderr), file=sys.stderr)
+        try:
+            fulllog = os.path.join(builddir, 'meson-logs', 'meson-log.txt')
+            with open(fulllog) as f:
+                print("Full log: %s" % f.read())
+        except:
+            print("Could not open %s" % fulllog)
+            pass
+        raise e
 
 
 def meson_introspect(_dir, introspect_type):
@@ -30,8 +48,9 @@ def meson_introspect(_dir, introspect_type):
 def meson_configure(*args, config_settings=None):
     if 'MESON_ARGS' in os.environ:
        args = os.environ.get('MESON_ARGS').split(' ') + list(args)
+       print("USING MESON_ARGS: %s" % args)
 
-    meson(*args, config_settings=config_settings)
+    meson(*args, builddir=args[0], config_settings=config_settings)
 
 def get_config():
     with open('pyproject.toml') as f:
@@ -307,7 +326,8 @@ def build_sdist(sdist_directory, config_settings=None):
     with tempfile.TemporaryDirectory() as builddir:
         with tempfile.TemporaryDirectory() as installdir:
             meson(builddir, '--prefix', installdir,
-                  config_settings=config_settings)
+                  config_settings=config_settings,
+                  builddir=builddir)
             subprocess.check_call(['ninja', '-C', builddir, 'dist'])
 
             project = meson_introspect(builddir, 'projectinfo')
