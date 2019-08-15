@@ -40,62 +40,14 @@ def meson(*args, config_settings=None, builddir=''):
         raise e
 
 
-def meson_introspect(_dir, introspect_type):
-    with open(os.path.join(_dir, 'meson-info', 'intro-' + introspect_type + '.json')) as f:
-        return json.load(f)
-
-
 def meson_configure(*args, config_settings=None):
     if 'MESON_ARGS' in os.environ:
        args = os.environ.get('MESON_ARGS').split(' ') + list(args)
        print("USING MESON_ARGS: %s" % args)
+    args = list(args)
+    args.append('-Dlibdir=lib')
 
     meson(*args, builddir=args[0], config_settings=config_settings)
-
-def get_config():
-    with open('pyproject.toml') as f:
-        config = pytoml.load(f)
-        try:
-            configmeta = config['tool']['mesonpep517']['metadata']
-        except KeyError:
-            raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
-                "for the meson backend")
-
-        return config
-
-
-@contextlib.contextmanager
-def cd(path):
-    CWD = os.getcwd()
-
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(CWD)
-
-
-def get_requires_for_build_wheel(config_settings=None):
-    """Returns a list of requirements for building, as strings"""
-    return get_config().get('requires_dist', [])
-
-
-# For now, we require all dependencies to build either a wheel or an sdist.
-get_requires_for_build_sdist = get_requires_for_build_wheel
-
-
-wheel_file_template = """\
-Wheel-Version: 1.0
-Generator: mesonpep517
-Root-Is-Purelib: {}
-"""
-
-
-def _write_wheel_file(f, supports_py2, is_pure):
-    f.write(wheel_file_template.format(str(is_pure).lower()))
-    if supports_py2:
-        f.write("Tag: py2-none-any\n")
-    f.write("Tag: py3-none-any\n")
 
 
 PKG_INFO = """\
@@ -115,77 +67,159 @@ readme_ext_to_content_type = {
     '.txt': 'text/plain',
 }
 
-def get_metadata(project, config):
-    meta = {
-        'name': project['descriptive_name'],
-        'version': project['version'],
-    }
 
-    configmeta = config['tool']['mesonpep517']['metadata']
-    if 'pkg-info-file' in configmeta:
-        res = '\n'.join(PKG_INFO.split('\n')[:3]).format(**meta) + '\n'
-        with open(configmeta['pkg-info-file'], 'r') as f:
-            orig_lines = f.readlines()
-            for l in orig_lines:
-                if l.startswith('Metadata-Version:') or \
-                        l.startswith('Version:'):
-                    continue
-                res += l
+class Config:
+    def __init__(self, builddir=None):
+        config = self.__get_config()
+        self.__metadata = config['tool']['mesonpep517']['metadata']
+        self.__entry_points = config['tool']['mesonpep517'].get('entry-points', [])
+        self.installed = []
+        self.options = []
+        self.builddir = None
+        if builddir:
+            self.set_builddir(builddir)
 
-        return  res
+    def __introspect(self, introspect_type):
+        with open(os.path.join(self.__builddir, 'meson-info', 'intro-' + introspect_type + '.json')) as f:
+            return json.load(f)
 
-    for key in ['summary', 'home_page', 'author', 'author_email']:
-        meta[key] = configmeta[key.replace('_', '-')]
+    def set_builddir(self, builddir):
+        self.__builddir = builddir
+        project = self.__introspect('projectinfo')
 
-    description = ''
-    description_content_type = 'text/plain'
-    if 'description-file' in configmeta:
-        description_file = Path(configmeta['description-file'])
-        with open(description_file, 'r') as f:
-            description = f.read()
+        self['version'] = project['version']
+        if 'module' not in self:
+            self['module'] = project['descriptive_name']
 
-        description_content_type = readme_ext_to_content_type.get(
-            description_file.suffix, description_content_type)
-    elif 'description' in configmeta:
-        description = configmeta['description']
-    meta['description_content_type'] = description_content_type
-    res = PKG_INFO.format(**meta)
+        self.installed = self.__introspect('installed')
+        self.options = self.__introspect('buildoptions')
+    
+    def __getitem__(self, key):
+        return self.__metadata[key]
 
-    for key, mdata_key in [
-            ('requires_dist', 'Requires-Dist'),
-            ('classifiers', 'Classifier'),
-            ('project_urls', 'Project-URL')]:
+    def __setitem__(self, key, value):
+        self.__metadata[key] = value
 
-        vals = configmeta.get(key, [])
-        for val in vals:
-            res += '{}: {}\n'.format(mdata_key, val)
+    def __contains__(self, key):
+        return key in self.__metadata
 
-    if description:
-        res += 'Description-Content-Type: {description_content_type}\n'.format(
-            **meta)
-        res += 'Description:\n\n' + description
+    @staticmethod
+    def __get_config():
+        with open('pyproject.toml') as f:
+            config = pytoml.load(f)
+            try:
+                metadata = config['tool']['mesonpep517']['metadata']
+            except KeyError:
+                raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
+                    "for the meson backend")
 
-    return res
+            if 'pkg-info-file' not in metadata:
+                for mandatory in ['author', 'author-email', 'summary']:
+                    if mandatory not in metadata:
+                        raise RuntimeError(
+                            "'%s' is mandatory in the `[tool.mesonpep517.metadata]` section"
+                            "for the meson backend" % mandatory)
+
+            return config
+
+    def get(self, key, default=None):
+        return self.__metadata.get(key, default)
+
+    def get_metadata(self):
+        meta = {
+            'name': self['module'],
+            'version': self['version'],
+        }
+
+        if 'pkg-info-file' in self:
+            res = '\n'.join(PKG_INFO.split('\n')[:3]).format(**meta) + '\n'
+            with open(self['pkg-info-file'], 'r') as f:
+                orig_lines = f.readlines()
+                for l in orig_lines:
+                    if l.startswith('Metadata-Version:') or \
+                            l.startswith('Version:'):
+                        continue
+                    res += l
+
+            return  res
+
+        for key in ['summary', 'home_page', 'author', 'author_email']:
+            meta[key] = self[key.replace('_', '-')]
+
+        description = ''
+        description_content_type = 'text/plain'
+        if 'description-file' in self:
+            description_file = Path(self['description-file'])
+            with open(description_file, 'r') as f:
+                description = f.read()
+
+            description_content_type = readme_ext_to_content_type.get(
+                description_file.suffix, description_content_type)
+        elif 'description' in self:
+            description = self['description']
+        meta['description_content_type'] = description_content_type
+        res = PKG_INFO.format(**meta)
+
+        for key, mdata_key in [
+                ('requires', 'Requires-Dist'),
+                ('classifiers', 'Classifier'),
+                ('project_urls', 'Project-URL')]:
+
+            vals = self.get(key, [])
+            for val in vals:
+                res += '{}: {}\n'.format(mdata_key, val)
+
+        if description:
+            res += 'Description-Content-Type: {description_content_type}\n'.format(
+                **meta)
+            res += 'Description:\n\n' + description
+
+        return res
+
+    def get_entry_points(self):
+        res = ''
+        for group_name in sorted(self.__entry_points):
+            res += '[{}]\n'.format(group_name)
+            group = self.__entry_points[group_name]
+            for entrypoint in sorted(group):
+                res += '{}\n'.format(entrypoint)
+            res += '\n'
+
+        return res
 
 
-def get_entry_points(project, config):
+@contextlib.contextmanager
+def cd(path):
+    CWD = os.getcwd()
+
+    os.chdir(path)
     try:
-        entrypoints = project['metadata']['python']['entry-points']
-    except KeyError:
-        try:
-            entrypoints = config['tool']['mesonpep517']['entry-points']
-        except KeyError:
-            return None
+        yield
+    finally:
+        os.chdir(CWD)
 
-    res = ''
-    for group_name in sorted(entrypoints):
-        res += '[{}]\n'.format(group_name)
-        group = entrypoints[group_name]
-        for entrypoint in sorted(group):
-            res += '{}\n'.format(entrypoint)
-        res += '\n'
 
-    return res
+def get_requires_for_build_wheel(config_settings=None):
+    """Returns a list of requirements for building, as strings"""
+    return Config().get('requires', [])
+
+
+# For now, we require all dependencies to build either a wheel or an sdist.
+get_requires_for_build_sdist = get_requires_for_build_wheel
+
+
+wheel_file_template = """\
+Wheel-Version: 1.0
+Generator: mesonpep517
+Root-Is-Purelib: {}
+"""
+
+
+def _write_wheel_file(f, supports_py2, is_pure):
+    f.write(wheel_file_template.format(str(is_pure).lower()))
+    if supports_py2:
+        f.write("Tag: py2-none-any\n")
+    f.write("Tag: py3-none-any\n")
 
 
 def check_is_pure(installed):
@@ -213,22 +247,20 @@ def prepare_metadata_for_build_wheel(metadata_directory,
         builddir = tempfile.TemporaryDirectory().name
         meson_configure(builddir, config_settings=config_settings)
     if not config:
-        config = get_config()
-
-    project = meson_introspect(builddir, 'projectinfo')
+        config = Config(builddir)
 
     dist_info = Path(metadata_directory, '{}-{}.dist-info'.format(
-        project['descriptive_name'], project['version']))
+                     config['module'], config['version']))
     dist_info.mkdir(exist_ok=True)
 
-    is_pure = check_is_pure(meson_introspect(builddir, 'installed'))
+    is_pure = check_is_pure(config.installed)
     with (dist_info / 'WHEEL').open('w') as f:
         _write_wheel_file(f, False, is_pure)
 
     with (dist_info / 'METADATA').open('w') as f:
-        f.write(get_metadata(project, config))
+        f.write(config.get_metadata())
 
-    entrypoints = get_entry_points(project, config)
+    entrypoints = config.get_entry_points()
     if entrypoints:
         with (dist_info / 'entry_points.txt').open('w') as f:
             f.write(entrypoints)
@@ -253,21 +285,18 @@ class WheelBuilder:
         self.builddir = tempfile.TemporaryDirectory()
         self.installdir = tempfile.TemporaryDirectory()
 
-    def introspect(self, introspect_type):
-        return meson_introspect(self.builddir.name, introspect_type)
-
     def build(self, wheel_directory, config_settings, metadata_dir):
-        args = [self.builddir.name, '--prefix', self.installdir.name]
-        meson_configure(*args, config_settings=config_settings)
+        config = Config()
 
-        config = get_config()
+        args = [self.builddir.name, '--prefix', self.installdir.name] + config.get('meson-options', [])
+        meson_configure(*args, config_settings=config_settings)
+        config.set_builddir(self.builddir.name)
+
         metadata_dir = prepare_metadata_for_build_wheel(
             wheel_directory, builddir=self.builddir.name,
             config=config)
-        project = self.introspect('projectinfo')
-        installed_files = self.introspect('installed')
 
-        is_pure = check_is_pure(installed_files)
+        is_pure = check_is_pure(config.installed)
         platform_tag = config.get(
             'platforms',
             'any' if is_pure else util.get_platform().replace('-', '_')
@@ -275,13 +304,13 @@ class WheelBuilder:
 
         if not is_pure:
             python = 'python3'
-            option_build = config['tool']['mesonpep517']['metadata'].get('meson-python-option-name')
+            option_build = config.get('meson-python-option-name')
             if not option_build:
                 python = 'python3'
                 log.warning("meson-python-option-name not specified in the " +
                     "[tool.mesonpep517.metadata] section, assuming `python3`")
             else:
-                for opt in self.introspect('buildoptions'):
+                for opt in config.options:
                     if opt['name'] == 'python_version':
                         python = opt['value']
                         break
@@ -290,11 +319,8 @@ class WheelBuilder:
             abi = '{}-none'.format(config.get('requires-python', 'py3'))
 
         target_fp = wheel_directory / '{}-{}-{}-{}.whl'.format(
-            project['descriptive_name'],
-            project['version'],
-            abi,
-            platform_tag,
-        )
+            config['module'], config['version'], abi, platform_tag,)
+
         self.wheel_zip = WheelFile(str(target_fp), 'w')
         for f in os.listdir(str(wheel_directory / metadata_dir)):
             self.wheel_zip.write(str(wheel_directory / metadata_dir / f),
@@ -302,14 +328,17 @@ class WheelBuilder:
 
         # Make sure everything is built
         subprocess.check_call(['ninja', '-C', self.builddir.name, 'install'])
-        for sfile, installpath in installed_files.items():
+        self.pack_files(config)
+        self.wheel_zip.close()
+        return str(target_fp)
+
+    def pack_files(self, config):
+        for _, installpath in config.installed.items():
             if "site-packages" in installpath:
                 while os.path.basename(installpath) != 'site-packages':
                     installpath = os.path.dirname(installpath)
                 self.wheel_zip.write_files(installpath)
                 break
-        self.wheel_zip.close()
-        return str(target_fp)
 
 
 def build_wheel(wheel_directory,
@@ -328,18 +357,17 @@ def build_sdist(sdist_directory, config_settings=None):
             meson(builddir, '--prefix', installdir,
                   config_settings=config_settings,
                   builddir=builddir)
+
+            config = Config(builddir)
             subprocess.check_call(['ninja', '-C', builddir, 'dist'])
 
-            project = meson_introspect(builddir, 'projectinfo')
-
-            tf_dir = '{}-{}'.format(project['descriptive_name'],
-                                    project['version'])
+            tf_dir = '{}-{}'.format(config['module'], config['version'])
             mesondistfilename = '%s.tar.xz' % tf_dir
             mesondisttar = tarfile.open(
                 Path(builddir) / 'meson-dist' / mesondistfilename)
             mesondisttar.extractall(installdir)
 
-            pkg_info = get_metadata(project, get_config())
+            pkg_info = config.get_metadata()
             distfilename = '%s.tar.gz' % tf_dir
             target = distdir / distfilename
             source_date_epoch = os.environ.get('SOURCE_DATE_EPOCH', '')

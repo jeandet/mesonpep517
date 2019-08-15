@@ -21,7 +21,7 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
-### `pkg-info-file`
+### `pkg-info-file` (Optionnal)
 
 Pass a PKG-INFO file direcly usable.
 
@@ -48,11 +48,16 @@ Author-email="tsaunier@gnome.org"
 
 A one sentence summary about the package
 
-### `meson-python-option-name`
+### `meson-python-option-name` (Optionnal)
 
 The name of the meson options that is used in the meson build definition
 to set the python installation when using
 [`python.find_installation()`](http://mesonbuild.com/Python-module.html#find_installation).
+
+### `meson-options` (Optionnal)
+
+A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
+environement variable at build time.
 
 ### `requires` (Optionnal)
 
