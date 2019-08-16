@@ -102,6 +102,22 @@ project_urls = [
 ]
 ```
 
+### `home-page` (Optionnal)
+
+A string containing the URL for the package's home page.
+
+Example:
+
+`http://www.example.com/~cschultz/bvote/`
+
+### `platforms` (Optionnal)
+
+Supported python platforms, can be 'any', py3, etc...
+
+### `module` (Optionnal)
+
+The name of the module, will use the meson project name if not specified
+
 
 ## Entry points section (Optionnal)
 

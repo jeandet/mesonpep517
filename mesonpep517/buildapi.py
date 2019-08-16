@@ -15,6 +15,7 @@ from gzip import GzipFile
 from pathlib import Path
 from wheel.wheelfile import WheelFile
 
+from .schema import VALID_OPTIONS
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +80,20 @@ class Config:
         if builddir:
             self.set_builddir(builddir)
 
+    def validate_options(self):
+        options = VALID_OPTIONS.copy()
+        options['version'] = {}
+        options['module'] = {}
+        for field, value in self.__metadata.items():
+            if field not in options:
+                raise RuntimeError("%s is not a valid option in the `[tool.mesonpep517.metadata]` section, "
+                    "got value: %s" % (field, value))
+            del options[field]
+
+        for field, desc in options.items():
+            if not desc.get('optionnal'):
+                raise RuntimeError("%s is mandatory in the `[tool.mesonpep517.metadata] section but was not found" % field)
+
     def __introspect(self, introspect_type):
         with open(os.path.join(self.__builddir, 'meson-info', 'intro-' + introspect_type + '.json')) as f:
             return json.load(f)
@@ -93,6 +108,7 @@ class Config:
 
         self.installed = self.__introspect('installed')
         self.options = self.__introspect('buildoptions')
+        self.validate_options()
     
     def __getitem__(self, key):
         return self.__metadata[key]

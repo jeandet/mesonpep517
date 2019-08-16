@@ -85,5 +85,24 @@ project_urls = [
     "Source, https://gitlab.com/thiblahute/mesonpep517",
 ]
 ```"""
-    }
+    },
+
+    "home-page": {
+        "optionnal": True,
+        "description": """A string containing the URL for the package's home page.
+
+Example:
+
+`http://www.example.com/~cschultz/bvote/`"""
+    },
+
+    "platforms": {
+        "optionnal": True,
+        "description": "Supported python platforms, can be 'any', py3, etc..."
+    },
+
+    "module": {
+        "optionnal": True,
+        "description": "The name of the module, will use the meson project name if not specified"
+    },
 }
