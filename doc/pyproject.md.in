@@ -1,0 +1,41 @@
+# The pyproject.toml config file
+
+This file lives at the root of the module/package, at the same place
+as the toplevel `meson.build` file.
+
+## Build system section
+
+This tells tools like pip to build your project with flit. It's a standard
+defined by PEP 517. For any project using mesonpep517, it will look like this:
+
+``` toml
+    [build-system]
+    requires = ["mesonpep517"]
+    build-backend = "mesonpep517.buildapi"
+```
+
+## Metadata section
+
+> NOTE: The project version and name are extracted from the `meson.build`
+> [`project()`](http://mesonbuild.com/Reference-manual.html#project) section.
+
+This section is called `[tool.mesonpep517.metadata]` in the file.
+
+{fields_desc}
+## Entry points section (Optionnal)
+
+You can declare [entry points](http://entrypoints.readthedocs.io/en/latest/)
+in the `[tools.mesonpep517.entry-points]` section. It is a list of
+'entrypointname = module:funcname` strings, for example for console
+scripts entry points:
+
+``` toml
+[tool.mesonpep517.entry-points]
+console_scripts = [
+    'otioview = opentimelineview.console:main',
+    'otiocat = opentimelineio.console.otiocat:main',
+    'otioconvert = opentimelineio.console.otioconvert:main',
+    'otiostat = opentimelineio.console.otiostat:main',
+    'otioautogen_serialized_schema_docs = opentimelineio.console.autogen_serialized_datamodel:main',
+]
+```

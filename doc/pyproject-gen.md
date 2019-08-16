@@ -21,7 +21,7 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
-### `pkg-info-file` (Optionnal)
+### pkg-info-file (Optionnal)
 
 Pass a PKG-INFO file direcly usable.
 
@@ -29,11 +29,11 @@ Pass a PKG-INFO file direcly usable.
 > file
 
 
-### `author`
+### author
 
 Your name
 
-### `author-email`
+### author-email
 
 Your email address
 
@@ -45,22 +45,22 @@ Author="Thibault Saunier"
 Author-email="tsaunier@gnome.org"
 ```
 
-### `summary`
+### summary
 
 A one sentence summary about the package
 
-### `meson-python-option-name` (Optionnal)
+### meson-python-option-name (Optionnal)
 
-The name of the meson options that is used in the meson build definition
+ The name of the meson options that is used in the meson build definition
 to set the python installation when using
 [`python.find_installation()`](http://mesonbuild.com/Python-module.html#find_installation).
 
-### `meson-options` (Optionnal)
+### meson-options (Optionnal)
 
-A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
+ A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
 environement variable at build time.
 
-### `requires` (Optionnal)
+### requires_dist (Optionnal)
 
 A list of other packages from PyPI that this package needs. Each package may
 be followed by a version specifier like ``(>=4.1)`` or ``>=4.1``, and/or an
@@ -74,23 +74,23 @@ after a semicolon. For example:
       ]
 ```
 
-### `description-file` (Optionnal)
+### description-file (Optionnal)
 
 A path (relative to the .toml file) to a file containing a longer description
 of your package to show on PyPI. This should be written in reStructuredText
   Markdown or plain text, and the filename should have the appropriate extension
   (`.rst`, `.md` or `.txt`).
 
-### `classifiers` (Optionnal)
+### classifiers (Optionnal)
 
 A list of [classifiers](https://pypi.python.org/pypi?%3Aaction=list_classifiers).
 
-### `requires-python` (Optionnal)
+### requires-python (Optionnal)
 
 A version specifier for the versions of Python this requires, e.g. ``~=3.3`` or
 ``>=3.3,<4`` which are equivalents.
 
-### `project_urls` (Optionnal)
+### project_urls (Optionnal)
 
 A list of `Type, url` as described in the
 [pep345](https://www.python.org/dev/peps/pep-0345/#project-url-multiple-use).
