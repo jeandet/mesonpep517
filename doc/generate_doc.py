@@ -10,8 +10,8 @@ def generate_doc():
     fields_desc = ""
     for option, desc in schema.VALID_OPTIONS.items():
         fields_desc += "### `%s`" % option
-        if desc.get("optionnal"):
-            fields_desc += " (Optionnal)"
+        if desc.get("optional"):
+            fields_desc += " (Optional)"
         fields_desc += "\n\n"
         fields_desc += desc['description']
         fields_desc += "\n\n"
