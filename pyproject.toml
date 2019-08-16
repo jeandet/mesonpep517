@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires = ["wheel>0.33", "meson", "pytoml",]
-project_urls= [
+project-urls= [
     "Source, https://gitlab.com/thiblahute/mesonpep517",
     "Documentation, https://thiblahute.gitlab.io/mesonpep517/",
 ]

@@ -179,7 +179,7 @@ class Config:
         for key, mdata_key in [
                 ('requires', 'Requires-Dist'),
                 ('classifiers', 'Classifier'),
-                ('project_urls', 'Project-URL')]:
+                ('project-urls', 'Project-URL')]:
 
             vals = self.get(key, [])
             for val in vals:

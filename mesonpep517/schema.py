@@ -63,6 +63,11 @@ of your package to show on PyPI. This should be written in reStructuredText
   (`.rst`, `.md` or `.txt`)."""
     },
 
+    "description": {
+        "optionnal": True,
+        "description": "The description of the project as a string if you do not want to specify 'description-file'"
+    },
+
     "classifiers": {
         "optionnal": True,
         "description": "A list of [classifiers](https://pypi.python.org/pypi?%3Aaction=list_classifiers)."
@@ -74,14 +79,14 @@ of your package to show on PyPI. This should be written in reStructuredText
 ``>=3.3,<4`` which are equivalents."""
     },
 
-    "project_urls": {
+    "project-urls": {
         "optionnal": True,
         "description": """A list of `Type, url` as described in the
 [pep345](https://www.python.org/dev/peps/pep-0345/#project-url-multiple-use).
 For example:
 
 ``` toml
-project_urls = [
+project-urls = [
     "Source, https://gitlab.com/thiblahute/mesonpep517",
 ]
 ```"""
