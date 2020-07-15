@@ -1,8 +1,4 @@
-project(
-    'mesonpep517',
-    version : '0.1.9999995',
-    license: 'LGPL2+',
-)
+project('mesonpep517', version : '0.1.9999996', license : 'LGPL2+')
 
 python = import('python').find_installation()
 subdir('mesonpep517')
