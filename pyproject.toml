@@ -1,8 +1,6 @@
 [build-system]
-requires = ["intreehooks", "wheel>0.33", "meson", "toml", "setuptools"]
-build-backend = "intreehooks:loader"
-
-[tool.intreehooks]
+requires = ["wheel>0.33", "meson", "toml", "setuptools"]
+backend-path = "."
 build-backend = "mesonpep517.buildapi"
 
 [tool.mesonpep517.metadata]
