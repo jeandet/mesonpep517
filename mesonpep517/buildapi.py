@@ -8,7 +8,7 @@ import tarfile
 import os
 import json
 import subprocess
-import pytoml
+import toml
 
 from distutils import util
 from gzip import GzipFile
@@ -109,7 +109,7 @@ class Config:
         self.installed = self.__introspect('installed')
         self.options = self.__introspect('buildoptions')
         self.validate_options()
-    
+
     def __getitem__(self, key):
         return self.__metadata[key]
 
@@ -122,7 +122,7 @@ class Config:
     @staticmethod
     def __get_config():
         with open('pyproject.toml') as f:
-            config = pytoml.load(f)
+            config = toml.load(f)
             try:
                 metadata = config['tool']['mesonpep517']['metadata']
             except KeyError:

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["intreehooks", "wheel>0.33", "meson", "pytoml", "setuptools"]
+requires = ["intreehooks", "wheel>0.33", "meson", "toml", "setuptools"]
 build-backend = "intreehooks:loader"
 
 [tool.intreehooks]
@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-requires = ["wheel>0.33", "meson", "pytoml", "setuptools"]
+requires = ["wheel>0.33", "meson", "toml", "setuptools"]
 project-urls= [
     "Source, https://gitlab.com/thiblahute/mesonpep517",
     "Documentation, https://thiblahute.gitlab.io/mesonpep517/",
