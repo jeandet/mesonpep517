@@ -1,1 +1,5 @@
-python.install_sources('buildapi.py', '__init__.py', 'schema.py', pure: true, subdir: 'mesonpep517')
+python.install_sources(
+    '__init__.py', 'buildapi.py', 'pep425tags.py', 'schema.py',
+    pure : true,
+    subdir : 'mesonpep517'
+)

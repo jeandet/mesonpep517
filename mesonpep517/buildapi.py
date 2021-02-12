@@ -10,11 +10,11 @@ import json
 import subprocess
 import toml
 
-from distutils import util
 from gzip import GzipFile
 from pathlib import Path
 from wheel.wheelfile import WheelFile
 
+from .pep425tags import get_platform_tag
 from .schema import VALID_OPTIONS
 
 log = logging.getLogger(__name__)
@@ -274,9 +274,11 @@ def prepare_metadata_for_build_wheel(metadata_directory,
 
 
 GET_CHECK = """
-from wheel import pep425tags
+from mesonpep517 import pep425tags
 print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
-      pep425tags.get_impl_ver(), pep425tags.get_abi_tag()))
+                          pep425tags.get_impl_ver(),
+                          pep425tags.get_abi_tag())
+)
 """
 
 
@@ -304,7 +306,7 @@ class WheelBuilder:
         is_pure = check_is_pure(config.installed)
         platform_tag = config.get(
             'platforms',
-            'any' if is_pure else util.get_platform().replace('-', '_')
+            'any' if is_pure else get_platform_tag()
         )
 
         if not is_pure:
