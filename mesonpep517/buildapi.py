@@ -88,7 +88,7 @@ class Config:
             del options[field]
 
         for field, desc in options.items():
-            if not desc.get('optional'):
+            if desc.get('required'):
                 raise RuntimeError("%s is mandatory in the `[tool.mesonpep517.metadata] section but was not found" % field)
 
     def __introspect(self, introspect_type):
