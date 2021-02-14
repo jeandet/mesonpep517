@@ -62,6 +62,7 @@ readme_ext_to_content_type = {
     '.rst': 'text/x-rst',
     '.md': 'text/markdown',
     '.txt': 'text/plain',
+    '': 'text/plain',
 }
 
 
@@ -171,7 +172,7 @@ class Config:
                 description = f.read()
 
             description_content_type = readme_ext_to_content_type.get(
-                description_file.suffix, description_content_type)
+                description_file.suffix.lower(), description_content_type)
         elif 'description' in self:
             description = self['description']
 
