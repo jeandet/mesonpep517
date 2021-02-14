@@ -151,7 +151,7 @@ class Config:
 
         res = PKG_INFO.format(**meta)
 
-        for key in ['summary', 'home-page', 'author', 'author-email']:
+        for key in ['summary', 'home-page', 'author', 'author-email', 'license']:
             if key in self:
                 res += '{}: {}\n'.format(key.capitalize(), self[key])
 

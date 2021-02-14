@@ -38,6 +38,10 @@ Example:
 `http://www.example.com/~cschultz/bvote/`"""
     },
 
+    "license": {
+        "description": """The license of the package, either the license name or an SPDX identifier."""
+    },
+
     "meson-options": {
         "description": """A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
 environement variable at build time."""
@@ -58,7 +62,8 @@ to set the python installation when using
 
 > ! NOTE: All other keys will be ignored if you pass an already prepared `PKG-INFO`
 > file
-""" },
+"""
+    },
 
     "platforms": {
         "description": "Supported Python platforms, can be 'any', py3, etc..."
