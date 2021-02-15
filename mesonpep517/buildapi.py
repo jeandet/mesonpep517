@@ -14,7 +14,7 @@ from gzip import GzipFile
 from pathlib import Path
 from wheel.wheelfile import WheelFile
 
-from .pep425tags import get_platform_tag
+from .pep425tags import get_abbr_impl, get_abi_tag, get_impl_ver, get_platform_tag
 from .schema import VALID_OPTIONS
 
 log = logging.getLogger(__name__)
@@ -223,9 +223,17 @@ Root-Is-Purelib: {}
 
 def _write_wheel_file(f, supports_py2, is_pure):
     f.write(wheel_file_template.format(str(is_pure).lower()))
-    if supports_py2:
-        f.write("Tag: py2-none-any\n")
-    f.write("Tag: py3-none-any\n")
+    if is_pure:
+        if supports_py2:
+            f.write("Tag: py2-none-any\n")
+        f.write("Tag: py3-none-any\n")
+    else:
+        f.write("Tag: {0}{1}-{2}-{3}\n".format(
+            get_abbr_impl(),
+            get_impl_ver(),
+            get_abi_tag(),
+            get_platform_tag()
+        ))
 
 
 def check_is_pure(installed):
