@@ -343,7 +343,7 @@ class WheelBuilder:
                 arcname=str(Path(metadata_dir) / f))
 
         # Make sure everything is built
-        subprocess.check_call(['ninja', '-C', self.builddir.name, 'install'])
+        meson('install', '-C', self.builddir.name)
         self.pack_files(config)
         self.wheel_zip.close()
         return str(target_fp)
@@ -375,7 +375,7 @@ def build_sdist(sdist_directory, config_settings=None):
                   builddir=builddir)
 
             config = Config(builddir)
-            subprocess.check_call(['ninja', '-C', builddir, 'dist'])
+            meson('dist', '-C', builddir)
 
             tf_dir = '{}-{}'.format(config['module'], config['version'])
             mesondistfilename = '%s.tar.xz' % tf_dir
