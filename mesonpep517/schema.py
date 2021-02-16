@@ -10,8 +10,8 @@ e.g. for mesonpep517 itself:
 
 ``` toml
 [tool.mesonpep517.metadata]
-Author="Thibault Saunier"
-Author-email="tsaunier@gnome.org"
+author="Thibault Saunier"
+author-email="tsaunier@gnome.org"
 ```"""
     },
 
@@ -40,6 +40,22 @@ Example:
 
     "license": {
         "description": """The license of the package, either the license name or an SPDX identifier."""
+    },
+
+    "maintainer": {
+        "description": "Name of current maintainer of the project (if different from author)"
+    },
+
+    "maintainer-email": {
+        "description": """Maintainer email address
+
+Example:
+
+``` toml
+[tool.mesonpep517.metadata]
+maintainer="Robin Goode"
+maintainer-email="rgoode@example.org"
+```"""
     },
 
     "meson-options": {
