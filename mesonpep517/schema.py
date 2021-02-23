@@ -8,10 +8,12 @@ VALID_OPTIONS = {
 """ },
 
     "author": {
+        "optional": True,
         "description": "Your name"
     },
 
     "author-email": {
+        "optional": True,
         "description": """Your email address
 
 e.g. for mesonpep517 itself:
@@ -24,7 +26,7 @@ Author-email="tsaunier@gnome.org"
     },
 
     "summary": {
-         "description": "A one sentence summary about the package"
+        "description": "A one sentence summary about the package"
     },
 
     "meson-python-option-name": {
