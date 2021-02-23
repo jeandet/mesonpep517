@@ -55,10 +55,6 @@ PKG_INFO = """\
 Metadata-Version: 2.1
 Name: {name}
 Version: {version}
-Summary: {summary}
-Home-page: {home_page}
-Author: {author}
-Author-email: {author_email}
 """
 
 
@@ -129,13 +125,6 @@ class Config:
                 raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
                     "for the meson backend")
 
-            if 'pkg-info-file' not in metadata:
-                for mandatory in ['author', 'author-email', 'summary']:
-                    if mandatory not in metadata:
-                        raise RuntimeError(
-                            "'%s' is mandatory in the `[tool.mesonpep517.metadata]` section"
-                            "for the meson backend" % mandatory)
-
             return config
 
     def get(self, key, default=None):
@@ -159,8 +148,20 @@ class Config:
 
             return  res
 
-        for key in ['summary', 'home_page', 'author', 'author_email']:
-            meta[key] = self[key.replace('_', '-')]
+        res = PKG_INFO.format(**meta)
+
+        for key in ['summary', 'home-page', 'author', 'author-email']:
+            if key in self:
+                res += '{}: {}\n'.format(key.capitalize(), self[key])
+
+        for key, mdata_key in [
+                ('requires', 'Requires-Dist'),
+                ('classifiers', 'Classifier'),
+                ('project-urls', 'Project-URL')]:
+
+            vals = self.get(key, [])
+            for val in vals:
+                res += '{}: {}\n'.format(mdata_key, val)
 
         description = ''
         description_content_type = 'text/plain'
@@ -173,21 +174,9 @@ class Config:
                 description_file.suffix, description_content_type)
         elif 'description' in self:
             description = self['description']
-        meta['description_content_type'] = description_content_type
-        res = PKG_INFO.format(**meta)
-
-        for key, mdata_key in [
-                ('requires', 'Requires-Dist'),
-                ('classifiers', 'Classifier'),
-                ('project-urls', 'Project-URL')]:
-
-            vals = self.get(key, [])
-            for val in vals:
-                res += '{}: {}\n'.format(mdata_key, val)
 
         if description:
-            res += 'Description-Content-Type: {description_content_type}\n'.format(
-                **meta)
+            res += 'Description-Content-Type: {}\n'.format(description_content_type)
             res += 'Description:\n\n' + description
 
         return res
