@@ -39,7 +39,7 @@ Example:
     },
 
     "license": {
-        "description": """The license of the package, either the license name or an SPDX identifier."""
+        "description": """Text indicating the license covering the distribution. This text can be either a valid license expression as defined in [pep639](https://www.python.org/dev/peps/pep-0639/#id88) or any free text."""
     },
 
     "maintainer": {
