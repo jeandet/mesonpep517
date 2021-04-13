@@ -22,7 +22,7 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
 {fields_desc}
-## Entry points section (Optionnal)
+## Entry points section (Optional)
 
 You can declare [entry points](http://entrypoints.readthedocs.io/en/latest/)
 in the `[tools.mesonpep517.entry-points]` section. It is a list of

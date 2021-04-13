@@ -5,10 +5,15 @@ import logging
 import sys
 import tempfile
 import tarfile
+import zipfile
 import os
 import json
 import subprocess
 import toml
+import abc
+import re
+import shlex
+import typing as T
 
 from gzip import GzipFile
 from pathlib import Path
@@ -20,35 +25,99 @@ from .schema import VALID_OPTIONS
 log = logging.getLogger(__name__)
 
 
-def meson(*args, config_settings=None, builddir=''):
-    try:
-        return subprocess.check_output(['meson'] + list(args))
-    except subprocess.CalledProcessError as e:
-        stdout = ''
-        stderr = ''
-        if e.stdout:
-            stdout = e.stdout.decode()
-        if e.stderr:
-            stderr = e.stderr.decode()
-        print("Could not run meson: %s\n%s" % (stdout, stderr), file=sys.stderr)
+class MesonCommand(abc.ABC):
+    __exe = 'meson'
+
+    def __init__(self, subcommand: str, *args: str, builddir: str, config_settings: T.Dict[str, str]={}) -> None:
+        if config_settings:
+            extra_args = config_settings.get(f'--{subcommand}-args')
+        else:
+            extra_args = None
+        if extra_args:
+            self.args = tuple([subcommand, *args, *shlex.split(shlex.quote(extra_args), posix=True)])
+        else:
+            self.args = tuple([subcommand, *args])
+
+        self.builddir = builddir
+
+    def execute(self) -> bytes:
         try:
-            fulllog = os.path.join(builddir, 'meson-logs', 'meson-log.txt')
-            with open(fulllog) as f:
-                print("Full log: %s" % f.read())
-        except:
-            print("Could not open %s" % fulllog)
-            pass
-        raise e
+            return subprocess.check_output([self.__exe, *self.args])
+        except subprocess.CalledProcessError as e:
+            stdout = ''
+            stderr = ''
+            if e.stdout:
+                stdout = e.stdout.decode()
+            if e.stderr:
+                stderr = e.stderr.decode()
+            print("Could not run meson: %s\n%s" % (stdout, stderr), file=sys.stderr)
+            fulllog = os.path.join(self.builddir, 'meson-logs', 'meson-log.txt')
+            try:
+                with open(fulllog) as f:
+                    print("Full log: %s" % f.read())
+            except:
+                print("Could not open %s" % fulllog)
+                pass
+            raise e
 
 
-def meson_configure(*args, config_settings=None):
-    if 'MESON_ARGS' in os.environ:
-       args = os.environ.get('MESON_ARGS').split(' ') + list(args)
-       print("USING MESON_ARGS: %s" % args)
-    args = list(args)
-    args.append('-Dlibdir=lib')
+class MesonSetupCommand(MesonCommand):
+    """First arg must be the builddir"""
+    def __init__(self, *args: str, config_settings: T.Dict[str, str]={}) -> None:
+        # Protect against user overriding prefix
+        if config_settings:
+            extra_args = config_settings.get("--setup-args", "")
+            for arg in shlex.split(shlex.quote(extra_args), posix=True):
+                if arg.startswith(("-Dprefix=", "--prefix")):
+                    print("mesonpep517 does not support overriding the prefix")
+                    sys.exit(1)
+        MesonCommand.__init__(self, 'setup', *args, builddir=args[0], config_settings=config_settings)
 
-    meson(*args, builddir=args[0], config_settings=config_settings)
+
+class MesonDistCommand(MesonCommand):
+    """First two args must be '-C' and the builddir"""
+
+    __formats_regex = re.compile(r'[\'"]?([a-z,]+)[\'"]?')
+
+    def __init__(self, *args: str, config_settings: T.Dict[str, str]={}) -> None:
+        MesonCommand.__init__(self, 'dist', *args, builddir=args[1], config_settings=config_settings)
+
+    def formats(self) -> T.Optional[T.Tuple[str]]:
+        """If formats is not passed in config_settings, defaults to ('xztar',)"""
+        for i, a in enumerate(self.args):
+            if a == '--formats':
+                match = self.__formats_regex.match(self.args[i+1])
+            elif a.startswith('--formats='):
+                match = self.__formats_regex.match(a.split('=')[1])
+            else:
+                continue
+            if not match:
+                print('Invalid "--formats" option. Please read Meson documentation for help.', file=sys.stderr)
+                return None
+            group = match.groups()[0]
+            if not group:
+                print('Invalid "--formats" option. Please read Meson documentation for help.', file=sys.stderr)
+                return None
+            return T.cast(T.Tuple[str], group.split(','))
+
+        return ('xztar',)
+
+    @staticmethod
+    def file_extenstion(format: str) -> str:
+        if format == 'gztar':
+            return '.tar.gz'
+        elif format == 'xztar':
+            return '.tar.xz'
+        elif format == 'zip':
+            return '.zip'
+        else:
+            assert False
+
+
+class MesonInstallCommand(MesonCommand):
+    """First two args must be '-C' and the builddir"""
+    def __init__(self, *args: str, config_settings: T.Dict[str, str]={}) -> None:
+        MesonCommand.__init__(self, 'install', *args, builddir=args[1], config_settings=config_settings)
 
 
 PKG_INFO = """\
@@ -212,7 +281,7 @@ def cd(path):
         os.chdir(CWD)
 
 
-def get_requires_for_build_wheel(config_settings=None):
+def get_requires_for_build_wheel(config_settings: T.Dict[str, str]):
     """Returns a list of requirements for building, as strings"""
     return Config().get('requires', [])
 
@@ -260,13 +329,13 @@ def check_is_pure(installed):
 
 
 def prepare_metadata_for_build_wheel(metadata_directory,
-                                     config_settings=None,
+                                     config_settings: T.Dict[str, str],
                                      builddir=None,
                                      config=None):
     """Creates {metadata_directory}/foo-1.2.dist-info"""
     if not builddir:
         builddir = tempfile.TemporaryDirectory().name
-        meson_configure(builddir, config_settings=config_settings)
+        MesonSetupCommand(builddir, config_settings=config_settings).execute()
     if not config:
         config = Config(builddir)
 
@@ -308,16 +377,16 @@ class WheelBuilder:
         self.builddir = tempfile.TemporaryDirectory()
         self.installdir = tempfile.TemporaryDirectory()
 
-    def build(self, wheel_directory, config_settings, metadata_dir):
+    def build(self, wheel_directory, config_settings: T.Dict[str, str], metadata_dir):
         config = Config()
 
         args = [self.builddir.name, '--prefix', self.installdir.name] + config.get('meson-options', [])
-        meson_configure(*args, config_settings=config_settings)
+        MesonSetupCommand(*args, config_settings=config_settings).execute()
         config.set_builddir(self.builddir.name)
 
         metadata_dir = prepare_metadata_for_build_wheel(
             wheel_directory, builddir=self.builddir.name,
-            config=config)
+            config_settings=config_settings, config=config)
 
         is_pure = check_is_pure(config.installed)
         platform_tag = config.get(
@@ -350,7 +419,7 @@ class WheelBuilder:
                 arcname=str(Path(metadata_dir) / f))
 
         # Make sure everything is built
-        meson('install', '-C', self.builddir.name)
+        MesonInstallCommand('-C', self.builddir.name, config_settings=config_settings).execute()
         self.pack_files(config)
         self.wheel_zip.close()
         return str(target_fp)
@@ -365,30 +434,35 @@ class WheelBuilder:
 
 
 def build_wheel(wheel_directory,
-                config_settings=None,
+                config_settings: T.Dict[str, str],
                 metadata_directory=None):
     """Builds a wheel, places it in wheel_directory"""
     return WheelBuilder().build(Path(
         wheel_directory), config_settings, metadata_directory)
 
 
-def build_sdist(sdist_directory, config_settings=None):
+def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
     """Builds an sdist, places it in sdist_directory"""
     distdir = Path(sdist_directory)
     with tempfile.TemporaryDirectory() as builddir:
         with tempfile.TemporaryDirectory() as installdir:
-            meson(builddir, '--prefix', installdir,
-                  config_settings=config_settings,
-                  builddir=builddir)
+            MesonSetupCommand(builddir, '--prefix', installdir, config_settings=config_settings).execute()
 
             config = Config(builddir)
-            meson('dist', '-C', builddir)
+            mesondistcmd = MesonDistCommand('-C', builddir, config_settings=config_settings)
+            mesondistcmd.execute()
 
+            formats = mesondistcmd.formats()
+            # assert here, because this can't be None if the subprocess exited with a 0 return code
+            assert formats
             tf_dir = '{}-{}'.format(config['module'], config['version'])
-            mesondistfilename = '%s.tar.xz' % tf_dir
-            mesondisttar = tarfile.open(
-                Path(builddir) / 'meson-dist' / mesondistfilename)
-            mesondisttar.extractall(installdir)
+            mesondistfilename = f'{tf_dir}{mesondistcmd.file_extenstion(formats[0])}'
+            if formats[0] == 'gztar' or formats[0] == 'xztar':
+                mesondistarch = tarfile.open(
+                    Path(builddir) / 'meson-dist' / mesondistfilename)
+            else:
+                mesondistarch = zipfile.ZipFile(Path(builddir) / 'meson-dist' / mesondistfilename)
+            mesondistarch.extractall(installdir)
 
             pkg_info = config.get_metadata()
             distfilename = '%s.tar.gz' % tf_dir
