@@ -1,9 +1,50 @@
 VALID_OPTIONS = {
+    # In [project]
+    "authors": {
+        "description":
+        'An array of tables with 2 keys: name and email.\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#authors-maintainers'
+    },
+
+    "description": {
+        "description": "A one sentence summary about the package\n"
+        "See: https://www.python.org/dev/peps/pep-0621/#description"
+    },
+
+    "readme": {
+        "description":
+        'The full description of the project (i.e. the README).\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#readme',
+    },
+
+    "dependencies": {
+        "description": """A list of other packages from PyPI that this package needs. Each package may
+be followed by a version specifier like ``(>=4.1)`` or ``>=4.1``, and/or an
+[environment marker](https://www.python.org/dev/peps/pep-0345/#environment-markers)
+after a semicolon. For example:
+
+``` toml
+      dependencies = [
+          "requests >=2.6",
+          "configparser; python_version == '2.7'",
+      ]
+```"""
+    },
+    'urls': {
+
+        'description': 'A table of URLs where the key is the URL label and the value is the URL itself.\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#urls'
+    },
+
+
+    # From [tool.mesonpep517.metadata]
     "author": {
+        "deprecated-by": "project.authors",
         "description": "Your name"
     },
 
     "author-email": {
+        "deprecated-by": "project.authors",
         "description": """Your email address
 
 e.g. for mesonpep517 itself:
@@ -19,11 +60,8 @@ author-email="tsaunier@gnome.org"
         "description": "A list of [classifiers](https://pypi.python.org/pypi?%3Aaction=list_classifiers)."
     },
 
-    "description": {
-        "description": "The description of the project as a string if you do not want to specify 'description-file'"
-    },
-
     "description-file": {
+        "deprecated-by": "project.readme",
         "description": """A path (relative to the .toml file) to a file containing a longer description
 of your package to show on PyPI. This should be written in reStructuredText
   Markdown or plain text, and the filename should have the appropriate extension
@@ -31,6 +69,7 @@ of your package to show on PyPI. This should be written in reStructuredText
     },
 
     "home-page": {
+        "deprecated-by": "project.urls.homepage",
         "description": """A string containing the URL for the package's home page.
 
 Example:
@@ -39,14 +78,17 @@ Example:
     },
 
     "license": {
+        "deprecated-by": "project.license",
         "description": """Text indicating the license covering the distribution. This text can be either a valid license expression as defined in [pep639](https://www.python.org/dev/peps/pep-0639/#id88) or any free text."""
     },
 
     "maintainer": {
+        "deprecated-by": "project.maintainers",
         "description": "Name of current maintainer of the project (if different from author)"
     },
 
     "maintainer-email": {
+        "deprecated-by": "project.maintainers",
         "description": """Maintainer email address
 
 Example:
@@ -59,8 +101,8 @@ maintainer-email="rgoode@example.org"
     },
 
     "meson-options": {
-        "description": """A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
-environement variable at build time."""
+        "description": """A list of default meson options to set, can be overridden and expended through the `MESON_ARGS`
+environment variable at build time."""
     },
 
     "meson-python-option-name": {
@@ -70,11 +112,12 @@ to set the python installation when using
     },
 
     "module": {
+        "deprecated-by": "project.maintainers",
         "description": "The name of the module, will use the meson project name if not specified"
     },
 
     "pkg-info-file": {
-        "description": """Pass a PKG-INFO file direcly usable.
+        "description": """Pass a PKG-INFO file directly usable.
 
 > ! NOTE: All other keys will be ignored if you pass an already prepared `PKG-INFO`
 > file
@@ -98,6 +141,7 @@ project-urls = [
     },
 
     "requires": {
+        "deprecated-by": "project.dependencies",
         "description": """A list of other packages from PyPI that this package needs. Each package may
 be followed by a version specifier like ``(>=4.1)`` or ``>=4.1``, and/or an
 [environment marker](https://www.python.org/dev/peps/pep-0345/#environment-markers)
@@ -117,7 +161,7 @@ after a semicolon. For example:
     },
 
     "summary": {
-        "required": True,
+        "deprecated-by": "project.description",
         "description": "A one sentence summary about the package"
     },
 

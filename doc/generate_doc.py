@@ -12,6 +12,8 @@ def generate_doc():
         fields_desc += "### `%s`" % option
         if desc.get("optional"):
             fields_desc += " (Optional)"
+        if desc.get("deprecated-by"):
+            fields_desc += f" (Deprecated, use `{desc['deprecated-by']}` instead)"
         fields_desc += "\n\n"
         fields_desc += desc['description']
         fields_desc += "\n\n"

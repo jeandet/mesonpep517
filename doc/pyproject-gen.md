@@ -21,9 +21,9 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
-### pkg-info-file (Optionnal)
+### pkg-info-file (Optional)
 
-Pass a PKG-INFO file direcly usable.
+Pass a PKG-INFO file directly usable.
 
 > ! NOTE: All other keys will be ignored if you pass an already prepared `PKG-INFO`
 > file
@@ -49,18 +49,18 @@ Author-email="tsaunier@gnome.org"
 
 A one sentence summary about the package
 
-### meson-python-option-name (Optionnal)
+### meson-python-option-name (Optional)
 
  The name of the meson options that is used in the meson build definition
 to set the python installation when using
 [`python.find_installation()`](http://mesonbuild.com/Python-module.html#find_installation).
 
-### meson-options (Optionnal)
+### meson-options (Optional)
 
- A list of default meson options to set, can be overriden and expended through the `MESON_ARGS`
-environement variable at build time.
+A list of default meson options to set, can be overridden and expended through the `MESON_ARGS`
+environment variable at build time.
 
-### requires_dist (Optionnal)
+### requires_dist (Optional)
 
 A list of other packages from PyPI that this package needs. Each package may
 be followed by a version specifier like ``(>=4.1)`` or ``>=4.1``, and/or an
@@ -74,23 +74,23 @@ after a semicolon. For example:
       ]
 ```
 
-### description-file (Optionnal)
+### description-file (Optional)
 
 A path (relative to the .toml file) to a file containing a longer description
 of your package to show on PyPI. This should be written in reStructuredText
   Markdown or plain text, and the filename should have the appropriate extension
   (`.rst`, `.md` or `.txt`).
 
-### classifiers (Optionnal)
+### classifiers (Optional)
 
 A list of [classifiers](https://pypi.python.org/pypi?%3Aaction=list_classifiers).
 
-### requires-python (Optionnal)
+### requires-python (Optional)
 
 A version specifier for the versions of Python this requires, e.g. ``~=3.3`` or
 ``>=3.3,<4`` which are equivalents.
 
-### project_urls (Optionnal)
+### project_urls (Optional)
 
 A list of `Type, url` as described in the
 [pep345](https://www.python.org/dev/peps/pep-0345/#project-url-multiple-use).
@@ -103,7 +103,7 @@ project_urls = [
 ```
 
 
-## Entry points section (Optionnal)
+## Entry points section (Optional)
 
 You can declare [entry points](http://entrypoints.readthedocs.io/en/latest/)
 in the `[tools.mesonpep517.entry-points]` section. It is a list of

@@ -138,22 +138,71 @@ readme_ext_to_content_type = {
 class Config:
     def __init__(self, builddir=None):
         config = self.__get_config()
-        self.__metadata = config['tool']['mesonpep517']['metadata']
-        self.__entry_points = config['tool']['mesonpep517'].get('entry-points', [])
+        self.__set_metadata_backward_compat(config)
+        self.__entry_points = config.get('tool', {}).get('mesonpep517', {}).get('entry-points', [])
         self.installed = []
         self.options = []
         self.builddir = None
         if builddir:
             self.set_builddir(builddir)
 
+    def _warn_deprecated_field(self, field, replacement):
+        log.warning(
+            f"Field `tool.mesonpep517.metadata.{field}` is deprecated since version 0.3"
+            f"Use {replacement} instead."
+                " Note that its support will be removed in a future version"
+        )
+
+    def __set_metadata_backward_compat(self, config):
+        self.__metadata = config.get('tool', {}).get('mesonpep517', {}).get('metadata', {})
+        self.__config = self.__metadata.copy()
+        self.__config.update(config.get('project', {}))
+
+        projects_urls = config.get('project', {}).get('urls')
+        if projects_urls:
+            urls = []
+            for label, url in projects_urls.items():
+                urls.append(f'{label.capitalize()}, {url}')
+            self.__config['project-urls'] = urls
+
+        entry_points = {}
+        entry_point_types = ['scripts', 'gui-scripts'] + list(config.get('project', {}).get('entry-points', {}).keys())
+        for entry_point_type in entry_point_types:
+            entry_point = config.get('project', {}).get(entry_point_type)
+            if not entry_point:
+                continue
+            if not isinstance(entry_point, dict):
+                raise RuntimeError(f"`project.{entry_point_type}` should be a dictionary")
+
+            epoints = []
+            for k, v in entry_point:
+                epoints = f'{k} = {v}'
+            entry_points[entry_point_type] = epoints
+
+        if entry_points:
+            self.__entry_points = entry_points
+
+        for old_name, new_name in {
+                'description-file': 'readme',
+                'description': 'summary',
+                'requires': 'dependencies'}.items():
+            old_value = self.__config.pop(old_name, None)
+            if old_value and not self.get(new_name):
+                self._warn_deprecated_field(old_name, new_name)
+                self[new_name] = old_value
+
     def validate_options(self):
         options = VALID_OPTIONS.copy()
         options['version'] = {}
         options['module'] = {}
-        for field, value in self.__metadata.items():
+        for field, value in self.__config.items():
             if field not in options:
-                raise RuntimeError("%s is not a valid option in the `[tool.mesonpep517.metadata]` section, "
+                raise RuntimeError("%s is not a valid option in the `[project]` section, "
                     "got value: %s" % (field, value))
+
+            replacement = options[field].get('deprecated-by')
+            if field in self.__metadata and replacement:
+                self._warn_deprecated_field(field, replacement)
             del options[field]
 
         for field, desc in options.items():
@@ -177,28 +226,32 @@ class Config:
         self.validate_options()
 
     def __getitem__(self, key):
-        return self.__metadata[key]
+        return self.__config[key]
 
     def __setitem__(self, key, value):
-        self.__metadata[key] = value
+        self.__config[key] = value
 
     def __contains__(self, key):
-        return key in self.__metadata
+        return key in self.__config
 
     @staticmethod
     def __get_config():
         with open('pyproject.toml') as f:
             config = toml.load(f)
             try:
-                metadata = config['tool']['mesonpep517']['metadata']
-            except KeyError:
-                raise RuntimeError("`[tool.mesonpep517.metadata]` section is mandatory "
-                    "for the meson backend")
+                config['tool']['mesonpep517']['metadata']
+                try:
+                    config['project']
+                except KeyError:
+                    raise RuntimeError("`[project]` section is mandatory "
+                        "for the meson backend")
+            except:
+                pass
 
             return config
 
     def get(self, key, default=None):
-        return self.__metadata.get(key, default)
+        return self.__config.get(key, default)
 
     def get_metadata(self):
         meta = {
@@ -220,19 +273,29 @@ class Config:
 
         res = PKG_INFO.format(**meta)
 
-        for key in [
-                'summary',
-                'home-page',
-                'author',
-                'author-email',
-                'maintainer',
-                'maintainer-email',
-                'license']:
+        for key, metadata in [
+                ('description', 'Summary'),
+                ('home-page', None),
+                ('homepage', None),
+                ('author', None),
+                ('author-email', None),
+                ('maintainer', None),
+                ('maintainer-email', None),
+                ('license', None)]:
             if key in self:
-                res += '{}: {}\n'.format(key.capitalize(), self[key])
+                metadata = metadata or key.capitalize()
+                res += '{}: {}\n'.format(metadata, self[key])
+
+        for key in ['authors', 'maintainers']:
+            authors = self.get(key, [])
+            for author in authors:
+                if 'name' in author:
+                    res += f"{key[:-1].capitalize()}: {author['name']}\n"
+                if 'email' in author:
+                    res += f"{key[:-1].capitalize()}-email: {author['email']}\n"
 
         for key, mdata_key in [
-                ('requires', 'Requires-Dist'),
+                ('dependencies', 'Requires-Dist'),
                 ('classifiers', 'Classifier'),
                 ('project-urls', 'Project-URL')]:
 
@@ -240,21 +303,21 @@ class Config:
             for val in vals:
                 res += '{}: {}\n'.format(mdata_key, val)
 
-        description = ''
+        readme = ''
         description_content_type = 'text/plain'
-        if 'description-file' in self:
-            description_file = Path(self['description-file'])
+        if 'readme' in self:
+            description_file = Path(self['readme'])
             with open(description_file, 'r') as f:
-                description = f.read()
+                readme = f.read()
 
             description_content_type = readme_ext_to_content_type.get(
                 description_file.suffix.lower(), description_content_type)
         elif 'description' in self:
-            description = self['description']
+            readme = self['description']
 
-        if description:
+        if readme:
             res += 'Description-Content-Type: {}\n'.format(description_content_type)
-            res += 'Description:\n\n' + description
+            res += 'Description:\n\n' + readme
 
         return res
 
@@ -283,7 +346,7 @@ def cd(path):
 
 def get_requires_for_build_wheel(config_settings: T.Dict[str, str]):
     """Returns a list of requirements for building, as strings"""
-    return Config().get('requires', [])
+    return Config().get('dependencies', [])
 
 
 # For now, we require all dependencies to build either a wheel or an sdist.
