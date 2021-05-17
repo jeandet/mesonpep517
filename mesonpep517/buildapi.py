@@ -221,6 +221,9 @@ class Config:
         if 'module' not in self:
             self['module'] = project['descriptive_name']
 
+        if "name" in self:
+            self['module'] = self['name']
+
         self.installed = self.__introspect('installed')
         self.options = self.__introspect('buildoptions')
         self.validate_options()

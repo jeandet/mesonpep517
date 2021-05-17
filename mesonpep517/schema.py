@@ -1,6 +1,19 @@
 VALID_OPTIONS = {
     # In [project]
+    "name": {
+        "description":
+        """The name of the project, as a string.
+The name specified in `project()` in the `meson.build` file will be used in case this is not specified.\n."""
+        'See: https://www.python.org/dev/peps/pep-0621/#name'
+    },
+
     "authors": {
+        "description":
+        'An array of tables with 2 keys: name and email.\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#authors-maintainers'
+    },
+
+    "maintainers": {
         "description":
         'An array of tables with 2 keys: name and email.\n'
         'See: https://www.python.org/dev/peps/pep-0621/#authors-maintainers'
@@ -30,10 +43,25 @@ after a semicolon. For example:
       ]
 ```"""
     },
+
+    "optional-dependencies": {
+        'description': 'A list of other optional packages from PyPI that this '
+        'package may use.\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#dependencies-optional-dependencies'
+    },
+
     'urls': {
 
         'description': 'A table of URLs where the key is the URL label and the value is the URL itself.\n'
         'See: https://www.python.org/dev/peps/pep-0621/#urls'
+    },
+
+    "dynamic": {
+        "description":
+        'An array of strings, Specifies which fields listed by this PEP were '
+        'intentionally unspecified so another tool can/will provide such '
+        'metadata dynamically.\n'
+        'See: https://www.python.org/dev/peps/pep-0621/#dynamic'
     },
 
 

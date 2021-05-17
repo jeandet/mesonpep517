@@ -21,7 +21,18 @@ defined by PEP 517. For any project using mesonpep517, it will look like this:
 
 This section is called `[tool.mesonpep517.metadata]` in the file.
 
+### `name`
+
+The name of the project, as a string.
+The name specified in `project()` in the `meson.build` file will be used in case this is not specified.
+.See: https://www.python.org/dev/peps/pep-0621/#name
+
 ### `authors`
+
+An array of tables with 2 keys: name and email.
+See: https://www.python.org/dev/peps/pep-0621/#authors-maintainers
+
+### `maintainers`
 
 An array of tables with 2 keys: name and email.
 See: https://www.python.org/dev/peps/pep-0621/#authors-maintainers
@@ -50,10 +61,20 @@ after a semicolon. For example:
       ]
 ```
 
+### `optional-dependencies`
+
+A list of other optional packages from PyPI that this package may use.
+See: https://www.python.org/dev/peps/pep-0621/#dependencies-optional-dependencies
+
 ### `urls`
 
 A table of URLs where the key is the URL label and the value is the URL itself.
 See: https://www.python.org/dev/peps/pep-0621/#urls
+
+### `dynamic`
+
+An array of strings, Specifies which fields listed by this PEP were intentionally unspecified so another tool can/will provide such metadata dynamically.
+See: https://www.python.org/dev/peps/pep-0621/#dynamic
 
 ### `author` (Deprecated, use `project.authors` instead)
 
