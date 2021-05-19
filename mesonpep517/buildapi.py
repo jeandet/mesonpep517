@@ -34,7 +34,7 @@ class MesonCommand(abc.ABC):
         else:
             extra_args = None
         if extra_args:
-            self.args = tuple([subcommand, *args, *shlex.split(shlex.quote(extra_args), posix=True)])
+            self.args = tuple([subcommand, *shlex.split(shlex.quote(extra_args), posix=True), *args])
         else:
             self.args = tuple([subcommand, *args])
 
