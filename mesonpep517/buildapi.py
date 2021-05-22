@@ -299,7 +299,7 @@ print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
 
 
 def get_abi(python):
-    return subprocess.check_output([python, '-c', GET_CHECK]).decode('utf-8').strip('\n')
+    return subprocess.check_output([python, '-c', GET_CHECK]).decode('utf-8').strip()
 
 
 class WheelBuilder:
