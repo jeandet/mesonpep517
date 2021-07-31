@@ -101,8 +101,35 @@ maintainer-email="rgoode@example.org"
     },
 
     "meson-options": {
-        "description": """A list of default meson options to set, can be overridden and expended through the `MESON_ARGS`
-environment variable at build time."""
+        "description": """A list of default meson options to set, can be overridden and expended through the use of
+[`config_settings`](https://www.python.org/dev/peps/pep-0517/#build-backend-interface).
+
+`mesonpep517` supports the following `config_settings`:
+
+- `--setup-args`: arguments that get passed along to the `meson setup` command at the end
+
+```sh
+python3 -m build . --config-setting=--setup-args="-Doption=value -Dother-option=value"
+
+# translates to
+meson setup ... -Doption=value -Dother-option=value
+```
+
+- `--dist-args`: arguments that get passed along to the `meson dist` command at the end
+
+```sh
+python3 -m build . --config-setting=--dist-args="--formats gztar --no-tests"
+# translates to
+meson dist ... --formats gztar --no-tests
+```
+
+- `--install-args`: arguments that get passed along to the `meson install` command at the end
+
+```sh
+python3 -m build . --config-setting=--install-args="--no-rebuild"
+# translates to
+meson install ... --no-rebuild
+```"""
     },
 
     "meson-python-option-name": {
