@@ -17,6 +17,9 @@ import typing as T
 
 from gzip import GzipFile
 from pathlib import Path
+
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 from wheel.wheelfile import WheelFile
 
 from .pep425tags import get_abbr_impl, get_abi_tag, get_impl_ver, get_platform_tag
@@ -297,6 +300,9 @@ class Config:
                 if 'email' in author:
                     res += f"{key[:-1].capitalize()}-email: {author['email']}\n"
 
+        if key == 'requires-python' and key in self:
+            res += '{}: {}\n'.format(key.title(), self[key])
+
         for key, mdata_key in [
                 ('dependencies', 'Requires-Dist'),
                 ('classifiers', 'Classifier'),
@@ -359,23 +365,21 @@ get_requires_for_build_sdist = get_requires_for_build_wheel
 wheel_file_template = """\
 Wheel-Version: 1.0
 Generator: mesonpep517
-Root-Is-Purelib: {}
+Root-Is-Purelib: {is_pure}
+Tag: {tag}
 """
 
 
-def _write_wheel_file(f, supports_py2, is_pure):
-    f.write(wheel_file_template.format(str(is_pure).lower()))
-    if is_pure:
-        if supports_py2:
-            f.write("Tag: py2-none-any\n")
-        f.write("Tag: py3-none-any\n")
-    else:
-        f.write("Tag: {0}{1}-{2}-{3}\n".format(
-            get_abbr_impl(),
-            get_impl_ver(),
-            get_abi_tag(),
-            get_platform_tag()
-        ))
+def _write_wheel_file(f, is_pure, wheel_tag):
+    f.write(wheel_file_template.format(is_pure=str(is_pure).lower(),
+                                       tag=wheel_tag))
+
+class NoPythonVersion(Exception):
+    """
+    Raised when a package specifies requires-python versions which cannot
+    match any versions.
+    """
+    pass
 
 
 def check_is_pure(installed):
@@ -394,6 +398,209 @@ def check_is_pure(installed):
     return True
 
 
+def _py3_only(supports_py2, supports_py3):
+    if supports_py3 is False:
+        raise NoPythonVersion('No versions of python have been allowed')
+
+    supports_py3 = True
+    supports_py2 = False
+
+    return (supports_py2, supports_py3)
+
+
+def _py2_only(supports_py2, supports_py3):
+    if supports_py2 is False:
+        raise NoPythonVersion('No versions of python have been allowed')
+
+    supports_py3 = False
+    supports_py2 = True
+
+    return (supports_py2, supports_py3)
+
+
+def _py2_or_py3(supports_py2, supports_py3):
+    if supports_py2 is None:
+        supports_py2 = True
+    if supports_py3 is None:
+        supports_py3 = True
+
+    return (supports_py2, supports_py3)
+
+
+def python_major_support(python_requirements):
+    """
+    Process version specifiers tell whether python2 or python3 are supported.
+
+    :arg python_requirements: A string containing version specifiers.  These
+        should correspond to the versions of python that are supported. If no
+        vesions are specified, both python2 and 3 are assumed to be supported.
+    :returns: A tuple of booleans.  The first value is whether python2 is
+        supported.  The second is whether python3 is supported.
+    :raises NoPythonVersion: When the requirements would exclude both python2
+        and python3.
+    """
+    # Backwards compat: mesonpep517 older than 0.2 allowed py2 and py3 in
+    # its requires-python field.  The old format also allowed things like py35
+    # but we're not going to handle those as their meaning would have been
+    # very bad for packagers anyway.
+    compat_from_old_format = None
+    old_format_python_versions = python_requirements.split('.')
+    if 'py2' in old_format_python_versions:
+        if 'py3' in old_format_python_versions:
+            compat_from_old_format = (True, True)
+        compat_from_old_format = (True, False)
+    if 'py3' in old_format_python_versions:
+        compat_from_old_format = (False, True)
+
+    if compat_from_old_format:
+        log.warning('Specifying `requires-python:` as `py2` or `py3` is'
+                    ' deprecated since version 0.3. Use version specifiers'
+                    ' (ex: `requires-python: ~=3`) instead.  Support for'
+                    ' `py2` and `py3` will be removed in a future version')
+        return compat_from_old_format
+
+    python_specifiers = SpecifierSet(python_requirements)
+
+    # The user has not specified what versions of python we run on
+    if not python_specifiers:
+        # Note: the other reasonable default would be to only list True for the
+        # python major which corresponds to the interpreter returned by
+        # _which_python().
+        return (True, True)
+
+    # packaging will parse specifiers but it doesn't have a way to say:
+    # "Does this specification allow any $MAJOR version X?" so we need to
+    # examine the specifiers ourselves.
+
+    supports_py2 = supports_py3 = None
+    for spec in python_specifiers:
+        version = Version(spec.version)
+
+        if spec.operator in ('==', '~='):
+            if version.major == 3:
+                supports_py2, supports_py3 = _py3_only(supports_py2, supports_py3)
+            elif version.major == 2:
+                supports_py2, supports_py3 = _py2_only(supports_py2, supports_py3)
+            else:  # version.major is neither 2 nor 3
+                raise NoPythonVersion('Packages must support either Python2 or'
+                                      f' Python3 but `{spec}` precludes that.')
+
+        if spec.operator == '>=':
+            if version.major == '3':
+                supports_py2, supports_py3 = _py3_only(supports_py2, supports_py3)
+            elif version.major <= '2':
+                supports_py2, supports_py3 = _py2_or_py3(supports_py2, supports_py3)
+            else:  # version.major is greater than 3
+                raise NoPythonVersion('Packages must support either Python2 or'
+                                      f' Python3 but `{spec}` precludes that.')
+
+        if spec.operator in ('<='):
+            if version.major >= 3:
+                supports_py2, supports_py3 = _py2_or_py3(supports_py2, supports_py3)
+            if version.major == 2:
+                supports_py2, supports_py3 = _py2_only(supports_py2, supports_py3)
+            else:  # version.major is less than 2
+                raise NoPythonVersion('Packages must support either Python2 or'
+                                      f' Python3 but `{spec}` precludes that.')
+
+        if spec.operator == '>':
+            if version.major == 3:
+                supports_py2, supports_py3 = _py3_only(supports_py2, supports_py3)
+            if version.major <= 2:
+                supports_py2, supports_py3 = _py2_or_py3(supports_py2, supports_py3)
+            else:  # version.major is greater than 3
+                raise NoPythonVersion('Packages must support either Python2 or'
+                                      f' Python3 but `{spec}` precludes that.')
+
+        if spec.operator == '<':
+            if version.major >= 3:
+                supports_py2, supports_py3 = _py2_only(supports_py2, supports_py3)
+            if version.major == 2:
+                if version == Version('2.0.0'):
+                    # version.major is less than 2.0
+                    raise NoPythonVersion('Packages must support either'
+                                          f' Python2 or Python3 but `{spec}`'
+                                          ' precludes that.')
+                # Specifier is something like "<2.3" so python2 is supported
+                supports_py2, supports_py3 = _py2_only(supports_py2, supports_py3)
+            else:  # version.major is less than 2
+                raise NoPythonVersion('Packages must support either Python2 or'
+                                      f' Python3 but `{spec}` precludes that.')
+
+    # Note: unlike ealier checks, this one processes None as False-y.
+    # That way, the logic is:
+    # * If the user specified requires-python in pyproject.toml
+    # AND
+    #   * There were no python2 or python3 versions specified,
+    #   OR
+    #   * The user specified versions eliminate both python2 and python3
+    # THEN
+    #   Raise an Exception
+    if not supports_py2 and not supports_py3:
+        raise NoPythonVersion('requires-python does not allow any versions'
+                              ' of python')
+
+    return (supports_py2, supports_py3)
+
+
+GET_CHECK = """
+from mesonpep517 import pep425tags
+print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
+                          pep425tags.get_impl_ver(),
+                          pep425tags.get_abi_tag())
+)
+"""
+
+
+def get_impl_abi(python):
+    return subprocess.check_output([python, '-c', GET_CHECK]).decode('utf-8').strip()
+
+
+def _which_python(config):
+    python = 'python3'
+    option_build = config.get('meson-python-option-name')
+    if not option_build:
+        python = 'python3'
+        log.info("meson-python-option-name not specified in the"
+                 " [tool.mesonpep517.metadata] section, assuming `python3`")
+    else:
+        for opt in config.options:
+            if opt['name'] == 'python_version':
+                python = opt['value']
+                break
+    return python
+
+
+def get_wheel_tag(config, is_pure):
+    # Please see https://gitlab.com/thiblahute/mesonpep517/-/issues/12 for
+    # the future of the platforms config option
+    platform_tag = config.get(
+        'platforms',
+        'any' if is_pure else get_platform_tag()
+    )
+
+    if is_pure:
+        supports_py2, supports_py3 = python_major_support(
+            config.get('requires-python', ''))
+        if supports_py2 and supports_py3:
+            impl_tag = 'py2.py3'
+        elif supports_py2:
+            impl_tag = 'py2'
+        else:
+            impl_tag = 'py3'
+        return '{}-none-{}'.format(impl_tag, platform_tag)
+
+    # Contains compiled extensions
+    python = _which_python(config)
+    impl_abi = get_impl_abi(python)
+
+    # Note that this doesn't handle manylinux yet.
+    return '{0}-{1}'.format(
+        impl_abi,
+        platform_tag
+    )
+
+
 def prepare_metadata_for_build_wheel(metadata_directory,
                                      config_settings: T.Dict[str, str],
                                      builddir=None,
@@ -410,8 +617,9 @@ def prepare_metadata_for_build_wheel(metadata_directory,
     dist_info.mkdir(exist_ok=True)
 
     is_pure = check_is_pure(config.installed)
+    wheel_tag = get_wheel_tag(config, is_pure)
     with (dist_info / 'WHEEL').open('w') as f:
-        _write_wheel_file(f, False, is_pure)
+        _write_wheel_file(f, is_pure, wheel_tag)
 
     with (dist_info / 'METADATA').open('w') as f:
         f.write(config.get_metadata())
@@ -422,19 +630,6 @@ def prepare_metadata_for_build_wheel(metadata_directory,
             f.write(entrypoints)
 
     return dist_info.name
-
-
-GET_CHECK = """
-from mesonpep517 import pep425tags
-print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
-                          pep425tags.get_impl_ver(),
-                          pep425tags.get_abi_tag())
-)
-"""
-
-
-def get_abi(python):
-    return subprocess.check_output([python, '-c', GET_CHECK]).decode('utf-8').strip()
 
 
 class WheelBuilder:
@@ -455,29 +650,10 @@ class WheelBuilder:
             config_settings=config_settings, config=config)
 
         is_pure = check_is_pure(config.installed)
-        platform_tag = config.get(
-            'platforms',
-            'any' if is_pure else get_platform_tag()
-        )
+        wheel_tag = get_wheel_tag(config, is_pure)
 
-        if not is_pure:
-            python = 'python3'
-            option_build = config.get('meson-python-option-name')
-            if not option_build:
-                python = 'python3'
-                log.warning("meson-python-option-name not specified in the " +
-                    "[tool.mesonpep517.metadata] section, assuming `python3`")
-            else:
-                for opt in config.options:
-                    if opt['name'] == 'python_version':
-                        python = opt['value']
-                        break
-            abi = get_abi(python)
-        else:
-            abi = '{}-none'.format(config.get('requires-python', 'py3'))
-
-        target_fp = wheel_directory / '{}-{}-{}-{}.whl'.format(
-            config['module'], config['version'], abi, platform_tag,)
+        target_fp = wheel_directory / '{}-{}-{}.whl'.format(
+            config['module'], config['version'], wheel_tag)
 
         self.wheel_zip = WheelFile(str(target_fp), 'w')
         for f in os.listdir(str(wheel_directory / metadata_dir)):

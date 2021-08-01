@@ -5,7 +5,7 @@ authors = [
 
 description="Create pep517 compliant packages from the meson build system"
 home-page="https://gitlab.com/thiblahute/mesonpep517"
-requires-python="py3"
+requires-python="~=3.0"
 readme="README.md"
 platforms="any"
 classifiers = [
@@ -14,13 +14,13 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["wheel>0.33", "meson", "toml", "setuptools"]
+dependencies = ["wheel>0.33", "meson", "toml", "setuptools", "packaging"]
 
 [project.urls]
 repository = "https://gitlab.com/thiblahute/mesonpep517"
 documentation = "https://thiblahute.gitlab.io/mesonpep517/"
 
 [build-system]
-requires = ["wheel>0.33", "meson", "toml", "setuptools"]
+requires = ["wheel>0.33", "meson", "toml", "setuptools", "packaging"]
 backend-path = "."
 build-backend = "mesonpep517.buildapi"
