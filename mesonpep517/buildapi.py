@@ -151,9 +151,9 @@ class Config:
 
     def _warn_deprecated_field(self, field, replacement):
         log.warning(
-            f"Field `tool.mesonpep517.metadata.{field}` is deprecated since version 0.3"
-            f"Use {replacement} instead."
-                " Note that its support will be removed in a future version"
+            f"Field `tool.mesonpep517.metadata.{field}` is deprecated since version 0.3."
+            f" Use {replacement} instead."
+            " Note that its support will be removed in a future version"
         )
 
     def __set_metadata_backward_compat(self, config):
@@ -193,6 +193,13 @@ class Config:
             if old_value and not self.get(new_name):
                 self._warn_deprecated_field(old_name, new_name)
                 self[new_name] = old_value
+
+        if 'license' in self and isinstance(self['license'], str):
+            log.warning('Setting project.license to a string is deprecated.'
+                        ' Use a table instead:\n'
+                        '   [project]\n'
+                        '   license = {text =  """License text here"""}\n')
+            self['license'] = {'text': self['license']}
 
     def validate_options(self):
         options = VALID_OPTIONS.copy()
@@ -286,8 +293,7 @@ class Config:
                 ('author', None),
                 ('author-email', None),
                 ('maintainer', None),
-                ('maintainer-email', None),
-                ('license', None)]:
+                ('maintainer-email', None)]:
             if key in self:
                 metadata = metadata or key.capitalize()
                 res += '{}: {}\n'.format(metadata, self[key])
@@ -311,6 +317,22 @@ class Config:
             vals = self.get(key, [])
             for val in vals:
                 res += '{}: {}\n'.format(mdata_key, val)
+
+        license = None
+        if 'license' in self:
+            license = self['license'].get('text')
+            if not license:
+                license_file = self['license'].get('file')
+                if license_file:
+                    with open(license_file, 'r') as f:
+                        license = f.read()
+            elif self['license'].get('file'):
+                raise RuntimeError('license field can only have one of text or file.')
+
+        if license:
+            res += 'License:\n'
+            for line in license.split('\n'):
+                res += ' ' * 7 + '|{}\n'.format(line)
 
         readme = ''
         description_content_type = 'text/plain'

@@ -107,7 +107,10 @@ Example:
 
     "license": {
         "deprecated-by": "project.license",
-        "description": """Text indicating the license covering the distribution. This text can be either a valid license expression as defined in [pep639](https://www.python.org/dev/peps/pep-0639/#id88) or any free text."""
+        "description":
+        "A table with either a `text` key and value of the license text or"
+        " a `file` key and value being a relative path to the license file.\n"
+        "See: https://www.python.org/dev/peps/pep-0621/#license"
     },
 
     "maintainer": {
