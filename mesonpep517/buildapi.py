@@ -83,7 +83,8 @@ class MesonDistCommand(MesonCommand):
     __formats_regex = re.compile(r'[\'"]?([a-z,]+)[\'"]?')
 
     def __init__(self, *args: str, config_settings: T.Dict[str, str]={}) -> None:
-        MesonCommand.__init__(self, 'dist', *args, builddir=args[1], config_settings=config_settings)
+        MesonCommand.__init__(self, 'dist', *args, '--include-subprojects',
+            builddir=args[1], config_settings=config_settings)
 
     def formats(self) -> T.Optional[T.Tuple[str]]:
         """If formats is not passed in config_settings, defaults to ('xztar',)"""
