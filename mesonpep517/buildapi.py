@@ -83,14 +83,22 @@ class MesonCommand(abc.ABC, Logger):
 
     def execute(self) -> bytes:
         try:
-            if self.verbose:
-                subprocess.check_call([self.__exe, *self.args])
+            env = os.environ.copy()
+            # Disabling scanner cache to avoid `Invalid cross-device link`
+            # renaming the cache.
+            env['GI_SCANNER_DISABLE_CACHE'] = '1'
+            kwargs = {
+                'env': env
+            }
+            args = [self.__exe, *self.args]
+            if self.verbosity:
+                subprocess.check_call(args, **kwargs)
                 return b''
             else:
-                return subprocess.check_output([self.__exe, *self.args])
+                return subprocess.check_output(args, **kwargs)
         except subprocess.CalledProcessError as e:
             self.error("Could not run meson")
-            if self.verbose > 1:
+            if self.verbosity > 1:
                 fulllog = os.path.join(self.builddir, 'meson-logs', 'meson-log.txt')
                 try:
                     with open(fulllog) as f:
