@@ -28,16 +28,54 @@ from .schema import VALID_OPTIONS
 log = logging.getLogger(__name__)
 
 
-class MesonCommand(abc.ABC):
+class Logger:
+    def __init__(self, config_settings: T.Dict[str, str]):
+        if hasattr(self, "config_settings"):
+            return
+
+        self.config_settings = config_settings or {}
+        verbose = self.config_settings.get('--verbose')
+        if verbose:
+            try:
+                self.verbosity = int(verbose)
+            except:
+                raise Exception("Invalid value for --verbose `{verbose}`, expects int.")
+
+        if self.config_settings.get('-v'):
+            self.verbosity = 0
+
+        self.verbosity = 1
+
+    def info(self, msg: str):
+        if self.verbosity <= 0:
+            return
+        print(msg)
+
+    def debug(self, msg: str):
+        if self.verbosity <= 1:
+            return
+
+        print(msg)
+
+    @staticmethod
+    def warn(msg: str):
+        print(f"WARN: {msg}", file=sys.stderr)
+
+    @staticmethod
+    def error(msg: str):
+        print(f"ERROR: {msg}", file=sys.stderr)
+
+
+
+class MesonCommand(abc.ABC, Logger):
     __exe = 'meson'
 
-    def __init__(self, subcommand: str, *args: str, builddir: str, config_settings: T.Dict[str, str]={}) -> None:
-        if config_settings:
-            extra_args = config_settings.get(f'--{subcommand}-args')
-        else:
-            extra_args = None
+    def __init__(self, subcommand: str, *args: str, builddir: str, config_settings: T.Dict[str, str]=None) -> None:
+        Logger.__init__(self, config_settings)
+
+        extra_args = self.config_settings.get(f'--{subcommand}-args')
         if extra_args:
-            self.args = tuple([subcommand, *shlex.split(shlex.quote(extra_args), posix=True), *args])
+            self.args = tuple([subcommand, *args, *shlex.split(extra_args)])
         else:
             self.args = tuple([subcommand, *args])
 
@@ -45,35 +83,38 @@ class MesonCommand(abc.ABC):
 
     def execute(self) -> bytes:
         try:
-            return subprocess.check_output([self.__exe, *self.args])
+            if self.verbose:
+                subprocess.check_call([self.__exe, *self.args])
+                return b''
+            else:
+                return subprocess.check_output([self.__exe, *self.args])
         except subprocess.CalledProcessError as e:
-            stdout = ''
-            stderr = ''
-            if e.stdout:
-                stdout = e.stdout.decode()
-            if e.stderr:
-                stderr = e.stderr.decode()
-            print("Could not run meson: %s\n%s" % (stdout, stderr), file=sys.stderr)
-            fulllog = os.path.join(self.builddir, 'meson-logs', 'meson-log.txt')
-            try:
-                with open(fulllog) as f:
-                    print("Full log: %s" % f.read())
-            except:
-                print("Could not open %s" % fulllog)
-                pass
+            self.error("Could not run meson")
+            if self.verbose > 1:
+                fulllog = os.path.join(self.builddir, 'meson-logs', 'meson-log.txt')
+                try:
+                    with open(fulllog) as f:
+                        self.debug(f"Full log:\n{f.read()}")
+                except:
+                    self.error(f"Could not open {fulllog}")
+                    pass
             raise e
 
 
 class MesonSetupCommand(MesonCommand):
     """First arg must be the builddir"""
-    def __init__(self, *args: str, config_settings: T.Dict[str, str]={}) -> None:
+    def __init__(self, *args: str, config_settings: T.Dict[str, str]=None) -> None:
+        config_settings = config_settings if config_settings else {}
+        self.setup_verbosity(config_settings)
+        self.info(f"Setup args: {args[1:]}")
         # Protect against user overriding prefix
-        if config_settings:
-            extra_args = config_settings.get("--setup-args", "")
-            for arg in shlex.split(shlex.quote(extra_args), posix=True):
-                if arg.startswith(("-Dprefix=", "--prefix")):
-                    print("mesonpep517 does not support overriding the prefix")
-                    sys.exit(1)
+        extra_args = config_settings.get("--setup-args", "")
+        Logger.__init__(self, config_settings)
+        self.debug(f"Setup args: {args[1:]}")
+        for arg in shlex.split(shlex.quote(extra_args), posix=True):
+            if arg.startswith(("-Dprefix=", "--prefix")):
+                self.error("mesonpep517 does not support overriding the prefix")
+                sys.exit(1)
         MesonCommand.__init__(self, 'setup', *args, builddir=args[0], config_settings=config_settings)
 
 
@@ -96,11 +137,11 @@ class MesonDistCommand(MesonCommand):
             else:
                 continue
             if not match:
-                print('Invalid "--formats" option. Please read Meson documentation for help.', file=sys.stderr)
+                self.warn('Invalid "--formats" option. Please read Meson documentation for help.')
                 return None
             group = match.groups()[0]
             if not group:
-                print('Invalid "--formats" option. Please read Meson documentation for help.', file=sys.stderr)
+                self.warn('Invalid "--formats" option. Please read Meson documentation for help.')
                 return None
             return T.cast(T.Tuple[str], group.split(','))
 
@@ -139,8 +180,9 @@ readme_ext_to_content_type = {
 }
 
 
-class Config:
-    def __init__(self, builddir=None):
+class Config(Logger):
+    def __init__(self, config_settings: T.Dict[str, str], builddir=None):
+        super().__init__(config_settings)
         config = self.__get_config()
         self.__set_metadata_backward_compat(config)
         self.__entry_points = config.get('tool', {}).get('mesonpep517', {}).get('entry-points', [])
@@ -378,7 +420,7 @@ def cd(path):
 
 def get_requires_for_build_wheel(config_settings: T.Dict[str, str]):
     """Returns a list of requirements for building, as strings"""
-    return Config().get('dependencies', [])
+    return Config(config_settings).get('dependencies', [])
 
 
 # For now, we require all dependencies to build either a wheel or an sdist.
@@ -629,11 +671,17 @@ def prepare_metadata_for_build_wheel(metadata_directory,
                                      builddir=None,
                                      config=None):
     """Creates {metadata_directory}/foo-1.2.dist-info"""
+    had_config = config is not None
+    if not config:
+        config = Config(config_settings)
+
     if not builddir:
         builddir = tempfile.TemporaryDirectory().name
-        MesonSetupCommand(builddir, config_settings=config_settings).execute()
-    if not config:
-        config = Config(builddir)
+
+        MesonSetupCommand(config, builddir=builddir, config_settings=config_settings).execute()
+
+    if not had_config:
+        config.set_builddir(builddir)
 
     dist_info = Path(metadata_directory, '{}-{}.dist-info'.format(
                      config['module'], config['version']))
@@ -702,8 +750,8 @@ def build_wheel(wheel_directory,
                 config_settings: T.Dict[str, str],
                 metadata_directory=None):
     """Builds a wheel, places it in wheel_directory"""
-    return WheelBuilder().build(Path(
-        wheel_directory), config_settings, metadata_directory)
+    return WheelBuilder(config_settings).build(Path(
+        wheel_directory), metadata_directory)
 
 
 def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
@@ -711,11 +759,11 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
     distdir = Path(sdist_directory)
     with tempfile.TemporaryDirectory() as builddir:
         with tempfile.TemporaryDirectory() as installdir:
-            config = Config()
+            config = Config(config_settings)
 
             MesonSetupCommand(builddir, '--prefix', installdir, *config.get('meson-options', []), config_settings=config_settings).execute()
 
-            config = Config(builddir)
+            config.set_builddir(builddir)
             mesondistcmd = MesonDistCommand('-C', builddir, config_settings=config_settings)
             mesondistcmd.execute()
 
