@@ -119,7 +119,7 @@ class MesonSetupCommand(MesonCommand):
         extra_args = config_settings.get("--setup-args", "")
         Logger.__init__(self, config_settings)
         self.debug(f"Setup args: {args[1:]}")
-        for arg in shlex.split(shlex.quote(extra_args), posix=True):
+        for arg in shlex.split(extra_args):
             if arg.startswith(("-Dprefix=", "--prefix")):
                 self.error("mesonpep517 does not support overriding the prefix")
                 sys.exit(1)
