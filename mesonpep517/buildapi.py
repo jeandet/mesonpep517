@@ -711,7 +711,9 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
     distdir = Path(sdist_directory)
     with tempfile.TemporaryDirectory() as builddir:
         with tempfile.TemporaryDirectory() as installdir:
-            MesonSetupCommand(builddir, '--prefix', installdir, config_settings=config_settings).execute()
+            config = Config()
+
+            MesonSetupCommand(builddir, '--prefix', installdir, *config.get('meson-options', []), config_settings=config_settings).execute()
 
             config = Config(builddir)
             mesondistcmd = MesonDistCommand('-C', builddir, config_settings=config_settings)
