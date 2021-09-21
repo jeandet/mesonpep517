@@ -208,10 +208,11 @@ class InstallPlan(Logger):
     def __init__(self, config: "Config", config_settings: T.Dict[str, str]):
         super().__init__(config_settings)
         self.__config = config
+        self.__targets = {} # List of installed files for a local target
+        self.__install_plan = None
         try:
             self.__install_plan = config.introspect('install_plan')
             self.__installed = config.introspect('installed')
-            self.__targets = {} # List of installed files for a local target
 
             for target in config.introspect('targets'):
                 install_filenames = target.get('install_filename')
@@ -219,7 +220,6 @@ class InstallPlan(Logger):
                     for filename in target['filename']:
                         self.__targets[filename] = install_filenames
         except FileNotFoundError:
-            self.__install_plan = None
             self.__installed = config.introspect('installed')
 
         self.is_pure = True
@@ -263,6 +263,8 @@ class InstallPlan(Logger):
             yield p
 
     def __legacy_inspect(self):
+        log.warning('Old meson version detected. Using fragile heuristics to'
+                    ' determine how to build the wheel.')
         variables = sysconfig.get_config_vars()
         platlib_suffix = variables.get('EXT_SUFFIX') or variables.get(
             'SO') or variables.get('.so')
@@ -728,12 +730,12 @@ def python_major_support(python_requirements):
     return (supports_py2, supports_py3)
 
 
-GET_CHECK = """
+CWDIR=Path(__file__).parent.parent
+GET_CHECK = f"""
+import sys
+sys.path.insert(0, '{CWDIR}')
 from mesonpep517 import pep425tags
-print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
-                          pep425tags.get_impl_ver(),
-                          pep425tags.get_abi_tag())
-)
+print("%s%s-%s" % (pep425tags.get_abbr_impl(), pep425tags.get_impl_ver(), pep425tags.get_abi_tag()))
 """
 
 
