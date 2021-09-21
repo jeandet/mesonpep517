@@ -727,24 +727,24 @@ def prepare_metadata_for_build_wheel(metadata_directory,
     return dist_info.name
 
 
-class WheelBuilder:
-    def __init__(self):
+class WheelBuilder(Logger):
+    def __init__(self, config_settings: T.Dict[str, str]):
+        super().__init__(config_settings)
         self.wheel_zip = None
         self.builddir = tempfile.TemporaryDirectory()
         self.installdir = tempfile.TemporaryDirectory()
 
-    def build(self, wheel_directory, config_settings: T.Dict[str, str], metadata_dir):
-        config = Config()
+    def build(self, wheel_directory: str, metadata_dir: str):
+        config = Config(self.config_settings)
 
         MesonSetupCommand(config, self.installdir.name, self.builddir.name, config_settings=self.config_settings).execute()
         config.set_builddir(self.builddir.name)
 
         metadata_dir = prepare_metadata_for_build_wheel(
             wheel_directory, builddir=self.builddir.name,
-            config_settings=config_settings, config=config)
+            config_settings=self.config_settings, config=config)
 
-        is_pure = check_is_pure(config.installed)
-        wheel_tag = get_wheel_tag(config, is_pure)
+        wheel_tag = get_wheel_tag(config, config.install_plan.is_pure)
 
         target_fp = wheel_directory / '{}-{}-{}.whl'.format(
             config['module'], config['version'], wheel_tag)
@@ -755,10 +755,11 @@ class WheelBuilder:
                 arcname=str(Path(metadata_dir) / f))
 
         # Make sure everything is built
-        MesonInstallCommand('-C', self.builddir.name, config_settings=config_settings).execute()
+        MesonInstallCommand('-C', self.builddir.name, config_settings=self.config_settings).execute()
         self.pack_files(config)
         self.wheel_zip.close()
         return str(target_fp)
+
 
     def pack_files(self, config):
         for _, installpath in config.installed.items():
