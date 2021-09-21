@@ -111,19 +111,35 @@ class MesonCommand(abc.ABC, Logger):
 
 class MesonSetupCommand(MesonCommand):
     """First arg must be the builddir"""
-    def __init__(self, *args: str, config_settings: T.Dict[str, str]=None) -> None:
-        config_settings = config_settings if config_settings else {}
-        self.setup_verbosity(config_settings)
-        self.info(f"Setup args: {args[1:]}")
-        # Protect against user overriding prefix
-        extra_args = config_settings.get("--setup-args", "")
+    def __init__(self, config: "Config",
+                 installdir: str=None, builddir: str=None,
+                 config_settings: T.Dict[str, str]=None) -> None:
         Logger.__init__(self, config_settings)
+
+        args = self.__get_args(config, installdir, builddir)
         self.debug(f"Setup args: {args[1:]}")
+
+        # Protect against user overriding prefix/libdir
+        extra_args = self.config_settings.get("--setup-args", "")
         for arg in shlex.split(extra_args):
             if arg.startswith(("-Dprefix=", "--prefix")):
                 self.error("mesonpep517 does not support overriding the prefix")
                 sys.exit(1)
-        MesonCommand.__init__(self, 'setup', *args, builddir=args[0], config_settings=config_settings)
+            elif arg.startswith(("-Dlibdir=", "--libdir")):
+                self.error("mesonpep517 does not support overriding the libdir")
+                sys.exit(1)
+
+        MesonCommand.__init__(self, 'setup', *args, builddir=builddir, config_settings=config_settings)
+
+    @staticmethod
+    def __get_args(config, installdir, builddir=None):
+        if config is None:
+            config = Config(self.config_settings)
+        res = [builddir if builddir else config.builddir] + config.get('meson-options', [])
+        if installdir:
+            res += ['--prefix', installdir]
+
+        return res
 
 
 class MesonDistCommand(MesonCommand):
@@ -720,8 +736,7 @@ class WheelBuilder:
     def build(self, wheel_directory, config_settings: T.Dict[str, str], metadata_dir):
         config = Config()
 
-        args = [self.builddir.name, '--prefix', self.installdir.name] + config.get('meson-options', [])
-        MesonSetupCommand(*args, config_settings=config_settings).execute()
+        MesonSetupCommand(config, self.installdir.name, self.builddir.name, config_settings=self.config_settings).execute()
         config.set_builddir(self.builddir.name)
 
         metadata_dir = prepare_metadata_for_build_wheel(
@@ -769,7 +784,8 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
         with tempfile.TemporaryDirectory() as installdir:
             config = Config(config_settings)
 
-            MesonSetupCommand(builddir, '--prefix', installdir, *config.get('meson-options', []), config_settings=config_settings).execute()
+            MesonSetupCommand(config, installdir, builddir,
+                config_settings=config_settings).execute()
 
             config.set_builddir(builddir)
             mesondistcmd = MesonDistCommand('-C', builddir, config_settings=config_settings)
