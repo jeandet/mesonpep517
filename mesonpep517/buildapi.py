@@ -204,17 +204,130 @@ readme_ext_to_content_type = {
 }
 
 
+class InstallPlan(Logger):
+    def __init__(self, config: "Config", config_settings: T.Dict[str, str]):
+        super().__init__(config_settings)
+        self.__config = config
+        try:
+            self.__install_plan = config.introspect('install_plan')
+            self.__installed = config.introspect('installed')
+            self.__targets = {} # List of installed files for a local target
+
+            for target in config.introspect('targets'):
+                install_filenames = target.get('install_filename')
+                if install_filenames:
+                    for filename in target['filename']:
+                        self.__targets[filename] = install_filenames
+        except FileNotFoundError:
+            self.__install_plan = None
+            self.__installed = config.introspect('installed')
+
+        self.is_pure = True
+
+        self.platlibs = []
+        self.distribution_files = []
+        self.typelibs = []
+
+        self.__inspect()
+
+    def __inspect(self):
+        if self.__install_plan is None:
+            self.__legacy_inspect()
+            return
+
+        data_infos = {
+            # Not using tags as gobject-introspection doesn't use the gnome
+            # module yet to generate the typelibs.
+            ".typelib": self.typelibs,
+        }
+        for section_data in self.__install_plan.items():
+            section = section_data[0]
+            data = section_data[1]
+            for build_filepath, info in data.items():
+                installpath = Path(self.__installed[build_filepath])
+                destination = Path(info['destination'])
+                if section == "python":
+                    if destination.parts[0] == '{py_platlib}':
+                        self.is_pure = False
+                    self.distribution_files.append(str(installpath))
+                elif destination.parts[0] == '{libdir_shared}':
+                    self.platlibs += self.__targets[build_filepath]
+                elif destination.parts[0] == '{module_shared}':
+                    self.is_pure = False
+                    self.distribution_files.append(str(installpath))
+                elif installpath.suffix in data_infos:
+                    data_infos[installpath.suffix].append(str(installpath))
+
+    def __iter__(self):
+        for p in self.__installed.values():
+            yield p
+
+    def __legacy_inspect(self):
+        variables = sysconfig.get_config_vars()
+        platlib_suffix = variables.get('EXT_SUFFIX') or variables.get(
+            'SO') or variables.get('.so')
+        # msys2's python3 has "-cpython-36m.dll", we have to be clever
+        split = platlib_suffix.rsplit('.', 1)
+
+        platlib_suffix = f".{split.pop(-1)}"
+        data_infos = {
+            ".typelib": self.typelibs,
+        }
+
+        install_paths = self.__installed.values()
+        for installpath in install_paths:
+            installpath = Path(installpath)
+            if installpath.suffix == platlib_suffix:
+                self.is_pure = False
+
+            if 'site-packages' in str(installpath):
+                self.distribution_files.append(str(installpath))
+            elif platlib_suffix in installpath.suffixes:
+                self.platlibs.append(str(installpath))
+            elif installpath.suffix in data_infos:
+                data_infos[installpath.suffix].append(str(installpath))
+
+
+    def get_wheel_path(self, file):
+        installpath = Path(file)
+        if str(installpath) in self.distribution_files:
+            installpath = Path(file)
+            path = Path()
+            while installpath.name != 'site-packages':
+                path = installpath.name / path
+                installpath = installpath.parent
+
+            return path
+
+        elif file in self.platlibs:
+            return f"{self.__config['module']}.libs" / Path(installpath.name)
+        elif file in self.typelibs:
+            return Path(f"{self.__config['module']}.data") / 'platlib' / 'girepository-1.0' / Path(installpath.name)
+
+        self.debug(f"{file} won't be packed")
+        return None
+
+
 class Config(Logger):
     def __init__(self, config_settings: T.Dict[str, str], builddir=None):
         super().__init__(config_settings)
         config = self.__get_config()
         self.__set_metadata_backward_compat(config)
         self.__entry_points = config.get('tool', {}).get('mesonpep517', {}).get('entry-points', [])
-        self.installed = []
+        self.__install_plan = None
         self.options = []
         self.builddir = None
         if builddir:
             self.set_builddir(builddir)
+
+    @property
+    def install_plan(self):
+        if self.__install_plan:
+            return self.__install_plan
+
+        self.__install_plan = InstallPlan(self, self.config_settings)
+
+        return self.__install_plan
 
     def _warn_deprecated_field(self, field, replacement):
         log.warning(
@@ -286,13 +399,13 @@ class Config(Logger):
             if desc.get('required'):
                 raise RuntimeError("%s is mandatory in the `[tool.mesonpep517.metadata] section but was not found" % field)
 
-    def __introspect(self, introspect_type):
-        with open(os.path.join(self.__builddir, 'meson-info', 'intro-' + introspect_type + '.json')) as f:
+    def introspect(self, introspect_type):
+        with open(os.path.join(self.builddir, 'meson-info', 'intro-' + introspect_type + '.json')) as f:
             return json.load(f)
 
-    def set_builddir(self, builddir):
-        self.__builddir = builddir
-        project = self.__introspect('projectinfo')
+    def set_builddir(self, builddir: os.PathLike):
+        self.builddir = builddir
+        project = self.introspect('projectinfo')
 
         self['version'] = project['version']
         if 'module' not in self:
@@ -301,8 +414,7 @@ class Config(Logger):
         if "name" in self:
             self['module'] = self['name']
 
-        self.installed = self.__introspect('installed')
-        self.options = self.__introspect('buildoptions')
+        self.options = self.introspect('buildoptions')
         self.validate_options()
 
     def __getitem__(self, key):
@@ -469,22 +581,6 @@ class NoPythonVersion(Exception):
     match any versions.
     """
     pass
-
-
-def check_is_pure(installed):
-    variables = sysconfig.get_config_vars()
-    suffix = variables.get('EXT_SUFFIX') or variables.get(
-        'SO') or variables.get('.so')
-    # msys2's python3 has "-cpython-36m.dll", we have to be clever
-    split = suffix.rsplit('.', 1)
-    suffix = split.pop(-1)
-
-    for installpath in installed.values():
-        if "site-packages" in installpath:
-            if installpath.split('.')[-1] == suffix:
-                return False
-
-    return True
 
 
 def _py3_only(supports_py2, supports_py3):
@@ -711,7 +807,7 @@ def prepare_metadata_for_build_wheel(metadata_directory,
                      config['module'], config['version']))
     dist_info.mkdir(exist_ok=True)
 
-    is_pure = check_is_pure(config.installed)
+    is_pure = config.install_plan.is_pure
     wheel_tag = get_wheel_tag(config, is_pure)
     with (dist_info / 'WHEEL').open('w') as f:
         _write_wheel_file(f, is_pure, wheel_tag)
@@ -762,12 +858,12 @@ class WheelBuilder(Logger):
 
 
     def pack_files(self, config):
-        for _, installpath in config.installed.items():
-            if "site-packages" in installpath:
-                while os.path.basename(installpath) != 'site-packages':
-                    installpath = os.path.dirname(installpath)
-                self.wheel_zip.write_files(installpath)
-                break
+        install_plan = config.install_plan
+        for installpath in install_plan:
+            wheel_path = install_plan.get_wheel_path(installpath)
+            if wheel_path:
+                self.debug(f"{installpath}-----> {wheel_path}")
+                self.wheel_zip.write(installpath, arcname=str(wheel_path))
 
 
 def build_wheel(wheel_directory,
