@@ -47,10 +47,15 @@ python3 -m build . --config-setting=--install-args="--no-rebuild"
 meson install ... --no-rebuild
 ```
 
-- `--verbose=level` or `-v`: Make the `mesonpep517` backend verbose, level can be:
-   - `0`: is not verbose at all
-   - `1`: outputs meson configuration and build stdout (same as `-v`)
-   - `2`: provides extra debugging information
+- `--log=<LOG_LEVEL>`: Make the `mesonpep517` backend verbose, level can be:
+   - `DEBUG`: Detailed information, typically of interest only when diagnosing problems.
+   - `INFO`: Confirmation that things are working as expected.
+   - `WARNING`: An indication that something unexpected happened, or indicative
+     of some problem in the near future (e.g. ‘disk space low’). The software is
+     still working as expected.
+   - `ERROR`: Due to a more serious problem, the software has not been able to perform some function.
+   - `CRITICAL`: A serious error, indicating that the program itself may be unable to continue running.
+- `--verbose` or `-v`: Make the `mesonpep517` backend more verbose
 
 ### Workflow to upload a release to pypi
 

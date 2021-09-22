@@ -28,50 +28,25 @@ from .schema import VALID_OPTIONS
 log = logging.getLogger(__name__)
 
 
-class Logger:
-    def __init__(self, config_settings: T.Dict[str, str]):
-        if hasattr(self, "config_settings"):
-            return
+def setup_logging(config_settings: T.Dict[str, str]):
+    config_settings = config_settings or {}
+    level = logging.WARNING
+    log_level = config_settings.get('--log')
+    if log_level:
+        level = getattr(logging, log_level.upper(), None)
+        if not isinstance(level, int):
+            raise Exception("Invalid value for --log `{log_level}`.")
+    elif '-v' in config_settings or '--verbose' in config_settings:
+        level = logging.INFO
 
-        self.config_settings = config_settings or {}
-        verbose = self.config_settings.get('--verbose')
-        if verbose:
-            try:
-                self.verbosity = int(verbose)
-            except:
-                raise Exception("Invalid value for --verbose `{verbose}`, expects int.")
-
-        if self.config_settings.get('-v'):
-            self.verbosity = 0
-
-        self.verbosity = 1
-
-    def info(self, msg: str):
-        if self.verbosity <= 0:
-            return
-        print(msg)
-
-    def debug(self, msg: str):
-        if self.verbosity <= 1:
-            return
-
-        print(msg)
-
-    @staticmethod
-    def warn(msg: str):
-        print(f"WARN: {msg}", file=sys.stderr)
-
-    @staticmethod
-    def error(msg: str):
-        print(f"ERROR: {msg}", file=sys.stderr)
+    logging.basicConfig(level=level)
 
 
-
-class MesonCommand(abc.ABC, Logger):
+class MesonCommand(abc.ABC):
     __exe = 'meson'
 
     def __init__(self, subcommand: str, *args: str, builddir: str, config_settings: T.Dict[str, str]=None) -> None:
-        Logger.__init__(self, config_settings)
+        self.config_settings = config_settings or {}
 
         extra_args = self.config_settings.get(f'--{subcommand}-args')
         if extra_args:
@@ -91,20 +66,20 @@ class MesonCommand(abc.ABC, Logger):
                 'env': env
             }
             args = [self.__exe, *self.args]
-            if self.verbosity:
+            if logging.root.level <= logging.INFO:
                 subprocess.check_call(args, **kwargs)
                 return b''
             else:
                 return subprocess.check_output(args, **kwargs)
         except subprocess.CalledProcessError as e:
-            self.error("Could not run meson")
-            if self.verbosity > 1:
+            log.error("Could not run meson")
+            if logging.root.level <= logging.DEBUG:
                 fulllog = os.path.join(self.builddir, 'meson-logs', 'meson-log.txt')
                 try:
                     with open(fulllog) as f:
-                        self.debug(f"Full log:\n{f.read()}")
+                        print(f"Full log:\n{f.read()}")
                 except:
-                    self.error(f"Could not open {fulllog}")
+                    log.error(f"Could not open {fulllog}")
                     pass
             raise e
 
@@ -114,19 +89,19 @@ class MesonSetupCommand(MesonCommand):
     def __init__(self, config: "Config",
                  installdir: str=None, builddir: str=None,
                  config_settings: T.Dict[str, str]=None) -> None:
-        Logger.__init__(self, config_settings)
+        self.config_settings = config_settings or {}
 
         args = self.__get_args(config, installdir, builddir)
-        self.debug(f"Setup args: {args[1:]}")
+        log.debug(f"Setup args: {args[1:]}")
 
         # Protect against user overriding prefix/libdir
         extra_args = self.config_settings.get("--setup-args", "")
         for arg in shlex.split(extra_args):
             if arg.startswith(("-Dprefix=", "--prefix")):
-                self.error("mesonpep517 does not support overriding the prefix")
+                log.error("mesonpep517 does not support overriding the prefix")
                 sys.exit(1)
             elif arg.startswith(("-Dlibdir=", "--libdir")):
-                self.error("mesonpep517 does not support overriding the libdir")
+                log.error("mesonpep517 does not support overriding the libdir")
                 sys.exit(1)
 
         MesonCommand.__init__(self, 'setup', *args, builddir=builddir, config_settings=config_settings)
@@ -161,11 +136,11 @@ class MesonDistCommand(MesonCommand):
             else:
                 continue
             if not match:
-                self.warn('Invalid "--formats" option. Please read Meson documentation for help.')
+                log.warning('Invalid "--formats" option. Please read Meson documentation for help.')
                 return None
             group = match.groups()[0]
             if not group:
-                self.warn('Invalid "--formats" option. Please read Meson documentation for help.')
+                log.warning('Invalid "--formats" option. Please read Meson documentation for help.')
                 return None
             return T.cast(T.Tuple[str], group.split(','))
 
@@ -204,9 +179,10 @@ readme_ext_to_content_type = {
 }
 
 
-class InstallPlan(Logger):
+class InstallPlan:
     def __init__(self, config: "Config", config_settings: T.Dict[str, str]):
-        super().__init__(config_settings)
+        self.config_settings = config_settings or {}
+
         self.__config = config
         self.__targets = {} # List of installed files for a local target
         self.__install_plan = None
@@ -306,13 +282,14 @@ class InstallPlan(Logger):
         elif file in self.typelibs:
             return Path(f"{self.__config['module']}.data") / 'platlib' / 'girepository-1.0' / Path(installpath.name)
 
-        self.debug(f"{file} won't be packed")
+        log.debug(f"{file} won't be packed")
         return None
 
 
-class Config(Logger):
+class Config:
     def __init__(self, config_settings: T.Dict[str, str], builddir=None):
-        super().__init__(config_settings)
+        self.config_settings = config_settings or {}
+
         config = self.__get_config()
         self.__set_metadata_backward_compat(config)
         self.__entry_points = config.get('tool', {}).get('mesonpep517', {}).get('entry-points', [])
@@ -825,9 +802,9 @@ def prepare_metadata_for_build_wheel(metadata_directory,
     return dist_info.name
 
 
-class WheelBuilder(Logger):
+class WheelBuilder:
     def __init__(self, config_settings: T.Dict[str, str]):
-        super().__init__(config_settings)
+        self.config_settings = config_settings or {}
         self.wheel_zip = None
         self.builddir = tempfile.TemporaryDirectory()
         self.installdir = tempfile.TemporaryDirectory()
@@ -864,7 +841,7 @@ class WheelBuilder(Logger):
         for installpath in install_plan:
             wheel_path = install_plan.get_wheel_path(installpath)
             if wheel_path:
-                self.debug(f"{installpath}-----> {wheel_path}")
+                log.debug(f"{installpath}-----> {wheel_path}")
                 self.wheel_zip.write(installpath, arcname=str(wheel_path))
 
 
@@ -872,12 +849,16 @@ def build_wheel(wheel_directory,
                 config_settings: T.Dict[str, str],
                 metadata_directory=None):
     """Builds a wheel, places it in wheel_directory"""
+    setup_logging(config_settings)
+
     return WheelBuilder(config_settings).build(Path(
         wheel_directory), metadata_directory)
 
 
 def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
     """Builds an sdist, places it in sdist_directory"""
+    setup_logging(config_settings)
+
     distdir = Path(sdist_directory)
     with tempfile.TemporaryDirectory() as builddir:
         with tempfile.TemporaryDirectory() as installdir:
