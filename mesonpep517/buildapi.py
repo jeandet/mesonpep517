@@ -21,8 +21,8 @@ from pathlib import Path
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from wheel.wheelfile import WheelFile
+from wheel.bdist_wheel import get_platform
 
-from .pep425tags import get_abbr_impl, get_abi_tag, get_impl_ver, get_platform_tag
 from .schema import VALID_OPTIONS
 
 log = logging.getLogger(__name__)
@@ -567,10 +567,11 @@ def python_major_support(python_requirements):
 
 
 GET_CHECK = """
-from mesonpep517 import pep425tags
-print("{0}{1}-{2}".format(pep425tags.get_abbr_impl(),
-                          pep425tags.get_impl_ver(),
-                          pep425tags.get_abi_tag())
+from packaging import tags
+from wheel import bdist_wheel
+print("{0}{1}-{2}".format(tags.interpreter_name(),
+                          tags.interpreter_version(),
+                          bdist_wheel.get_abi_tag())
 )
 """
 
@@ -622,6 +623,11 @@ def get_wheel_tag(config, is_pure):
         impl_abi,
         platform_tag
     )
+
+
+def get_platform_tag():
+    """Return the PEP-425 compatible platform tag."""
+    return get_platform().replace("-", "_").replace(".", "_")
 
 
 def prepare_metadata_for_build_wheel(metadata_directory,
