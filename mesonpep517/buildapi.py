@@ -581,6 +581,7 @@ def get_impl_abi(python):
 
 
 def _which_python(config):
+    log.info(f'config.options: {config.options}')
     python = 'python3'
     option_build = config.get('meson-python-option-name')
     if not option_build:
@@ -591,6 +592,7 @@ def _which_python(config):
         for opt in config.options:
             if opt['name'] == 'python_version':
                 python = opt['value']
+                log.info(f"using python: {python}")
                 break
     return python
 
@@ -671,6 +673,10 @@ class WheelBuilder:
         config = Config()
 
         args = [self.builddir.name, '--prefix', self.installdir.name] + config.get('meson-options', [])
+        option_build = config.get('meson-python-option-name')
+        if option_build:
+            args.append(f"-D{option_build}={_which_python(config)}")
+
         MesonSetupCommand(*args, config_settings=config_settings).execute()
         config.set_builddir(self.builddir.name)
 
@@ -719,7 +725,12 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
         with tempfile.TemporaryDirectory() as installdir:
             config = Config()
 
-            MesonSetupCommand(builddir, '--prefix', installdir, *config.get('meson-options', []), config_settings=config_settings).execute()
+            args = [builddir, '--prefix', installdir] + config.get('meson-options', [])
+            option_build = config.get('meson-python-option-name')
+            if option_build:
+                args.append(f"-D{option_build}={_which_python(config)}")
+
+            MesonSetupCommand(*args, config_settings=config_settings).execute()
 
             config = Config(builddir)
             mesondistcmd = MesonDistCommand('-C', builddir, config_settings=config_settings)
