@@ -627,7 +627,7 @@ def get_wheel_tag(config, is_pure):
 
 def get_platform_tag():
     """Return the PEP-425 compatible platform tag."""
-    return get_platform().replace("-", "_").replace(".", "_")
+    return get_platform(None).replace("-", "_").replace(".", "_")
 
 
 def prepare_metadata_for_build_wheel(metadata_directory,
