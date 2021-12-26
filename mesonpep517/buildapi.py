@@ -594,6 +594,8 @@ def _which_python(config):
                 python = opt['value']
                 log.info(f"using python: {python}")
                 break
+        else:
+            python = sys.executable
     return python
 
 
