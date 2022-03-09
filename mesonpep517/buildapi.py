@@ -730,21 +730,20 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
             else:
                 mesondistarch = zipfile.ZipFile(Path(builddir) / 'meson-dist' / mesondistfilename)
             mesondistarch.extractall(installdir)
-
+            mesondistarch.close()
             pkg_info = config.get_metadata()
             distfilename = '%s.tar.gz' % tf_dir
             target = distdir / distfilename
             source_date_epoch = os.environ.get('SOURCE_DATE_EPOCH', '')
             mtime = int(source_date_epoch) if source_date_epoch else None
+            pkginfo_path = Path(installdir) / tf_dir / 'PKG-INFO'
+            with open(pkginfo_path, mode='w') as fpkginfo:
+                fpkginfo.write(pkg_info)
             with GzipFile(str(target), mode='wb', mtime=mtime) as gz:
                 with cd(installdir):
-                    with tarfile.TarFile(str(target), mode='w',
+                    with tarfile.open(str(target), mode='w',
                                          fileobj=gz,
                                          format=tarfile.PAX_FORMAT) as tf:
                         tf.add(tf_dir, recursive=True)
-                        pkginfo_path = Path(installdir) / tf_dir / 'PKG-INFO'
-                        with open(pkginfo_path, mode='w') as fpkginfo:
-                            fpkginfo.write(pkg_info)
-                            fpkginfo.flush()
-                            tf.add(Path(tf_dir) / 'PKG-INFO')
+
     return target.name
