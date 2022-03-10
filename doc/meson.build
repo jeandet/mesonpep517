@@ -1,4 +1,4 @@
-if run_command(python, '-c', 'import hotdoc').returncode() != 0
+if run_command(python, '-c', 'import hotdoc', check:false).returncode() != 0
     message('Not building documentation')
     subdir_done()
 endif
