@@ -749,6 +749,7 @@ def build_sdist(sdist_directory, config_settings: T.Dict[str, str]):
             else:
                 mesondistarch = zipfile.ZipFile(Path(builddir) / 'meson-dist' / mesondistfilename)
             mesondistarch.extractall(installdir)
+            mesondistarch.close()
 
             pkg_info = config.get_metadata()
             distfilename = '%s.tar.gz' % tf_dir
